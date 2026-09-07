@@ -297,6 +297,12 @@ td.conflict .warn-icon{color:var(--danger);margin-right:4px;cursor:help;}
 .settings-loc-row .loc-name{width:170px;}
 .settings-loc-row .loc-slots{flex:1;}
 
+.wish-row{display:flex;gap:8px;align-items:center;margin-bottom:8px;}
+.wish-row select, .wish-row input[type=time], .wish-row input[type=text]{padding:7px;border:1px solid var(--border);border-radius:4px;font-size:13px;}
+.wish-row .wish-loc{width:170px;}
+.wish-row .wish-time{width:110px;}
+.wish-row .wish-note{flex:1;}
+
 .warning-banner{
   background:#fdecea;border:1px solid var(--danger);color:var(--danger);
   padding:10px 14px;border-radius:6px;margin-bottom:14px;font-size:14px;
@@ -359,7 +365,7 @@ td.conflict .warn-icon{color:var(--danger);margin-right:4px;cursor:help;}
       <thead>
         <tr>
           <th>Name</th><th>Typ</th><th>Anreise</th><th>Abreise</th>
-          <th>Ø Auftritte</th><th>Mitglieder</th><th>Parkplatz</th><th>Anhänger</th><th>Znacht</th>
+          <th>Ø Auftritte</th><th>Wünsche</th><th>Mitglieder</th><th>Parkplatz</th><th>Anhänger</th><th>Znacht</th>
           <th>Tourmanager</th><th>Präsident</th><th></th>
         </tr>
       </thead>
@@ -468,6 +474,12 @@ td.conflict .warn-icon{color:var(--danger);margin-right:4px;cursor:help;}
         <div class="form-field checkbox">
           <input type="checkbox" id="gDinner"><label>Znachtessen</label>
         </div>
+
+        <fieldset>
+          <legend>Auftritts-Wünsche (Ort/Zeit)</legend>
+          <div id="groupWishesContainer"></div>
+          <button type="button" class="btn btn-secondary btn-small" id="btnAddWish">＋ Wunsch hinzufügen</button>
+        </fieldset>
 
         <fieldset>
           <legend>Tourmanager</legend>
@@ -632,6 +644,7 @@ function normalizeState(parsed){
   if(!s.groups) s.groups = [];
   if(!s.plan) s.plan = {};
   if(!s.umzug) s.umzug = [];
+  s.groups.forEach(g => { if(!Array.isArray(g.wishes)) g.wishes = []; });
   return s;
 }
 
@@ -772,7 +785,9 @@ function battleSlotLabel(idx){
    zugeteilt: Stammmitglieder zuerst, danach nach Anzahl gewünschter
    Auftritte absteigend sortiert. Für jede Gruppe werden nacheinander die
    bestbewerteten freien Slots vergeben (Standortgrösse passend zur
-   Gruppengrösse, gleichmässige Auslastung der Standorte).
+   Gruppengrösse, gleichmässige Auslastung der Standorte, sowie – sofern
+   vorhanden – Ort/Zeit-Wünsche der Gruppe (g.wishes) als stärkstes weiches
+   Kriterium; jeder Wunsch wird höchstens einem Auftritt zugerechnet).
 
    Vereinfachung: Ein Auftritt wird als Zeitpunkt-Ereignis behandelt
    (keine explizite Dauer je Standort-Slot). Der Mindestpuffer wird daher
@@ -848,6 +863,8 @@ function generatePlan(){
 
     const wantedCategory = groupSizeCategory(g);
     let assigned = 0;
+    const consumedWishIds = new Set();
+    const WISH_TIME_TOLERANCE = 45; // Minuten
 
     for(let attempt = 0; attempt < remaining; attempt++){
       let candidates = [];
@@ -864,7 +881,23 @@ function generatePlan(){
           if(cat === wantedCategory) score += 10;        // weicher Constraint 6/7
           else if(cat === "neutral") score += 3;
           score += (1 - used/total) * 5;                  // weicher Constraint 8: Auslastung ausgleichen
-          candidates.push({loc, timeStr, slotMin, score});
+
+          // weicher Constraint 9: Ort/Zeit-Wünsche der Gruppe bevorzugen.
+          let wishBonus = 0, matchedWish = null;
+          (g.wishes||[]).forEach(w => {
+            if(consumedWishIds.has(w.id)) return;
+            const locMatch = !!w.locationId && w.locationId === loc.id;
+            const wTime = w.time ? parseTimeToMinutes(w.time) : null;
+            const timeMatch = wTime !== null && Math.abs(slotMin - wTime) <= WISH_TIME_TOLERANCE;
+            let b = 0;
+            if(locMatch && timeMatch) b = 25;
+            else if(locMatch) b = 15;
+            else if(timeMatch) b = 8;
+            if(b > wishBonus){ wishBonus = b; matchedWish = w; }
+          });
+          score += wishBonus;
+
+          candidates.push({loc, timeStr, slotMin, score, matchedWish});
         });
       });
 
@@ -876,6 +909,7 @@ function generatePlan(){
       newPlan[g.id][choice.loc.id] = choice.timeStr;
       locUsage[choice.loc.id][choice.timeStr] = g.id;
       blocked[g.id].push({start:choice.slotMin, end:choice.slotMin});
+      if(choice.matchedWish) consumedWishIds.add(choice.matchedWish.id);
       assigned++;
     }
 
@@ -1010,18 +1044,32 @@ function computeConflicts(){
    TAB 1: GRUPPEN
    ====================================================================== */
 
+function formatWishLine(w){
+  const locName = w.locationId ? (getLocation(w.locationId)?.name || "?") : "beliebiger Ort";
+  return locName + (w.time ? " @ "+w.time : "") + (w.note ? " – "+w.note : "");
+}
+
+function wishesSummary(g){
+  return (g.wishes||[]).map(formatWishLine).join(" | ");
+}
+
 function renderGroups(){
   const tbody = document.getElementById("groupsTbody");
   tbody.innerHTML = "";
   state.groups.forEach(g => {
     const tr = document.createElement("tr");
     tr.className = g.type === "Stamm" ? "row-stamm" : "row-gast";
+    const wishCount = (g.wishes||[]).length;
+    const wishCell = wishCount
+      ? '<span class="badge badge-neutral" title="'+escapeHtml(wishesSummary(g))+'">'+wishCount+' Wunsch'+(wishCount>1?"e":"")+'</span>'
+      : "–";
     tr.innerHTML =
       "<td>"+escapeHtml(g.name)+"</td>"+
       "<td>"+(g.type==="Stamm" ? '<span class="tag-stamm">Stamm</span>' : '<span class="tag-gast">Gast</span>')+"</td>"+
       "<td>"+(g.arrival||"–")+"</td>"+
       "<td>"+(g.departure||"–")+"</td>"+
       "<td>"+(g.desiredCount>0 ? g.desiredCount : "egal")+"</td>"+
+      "<td>"+wishCell+"</td>"+
       "<td>"+g.memberCount+"</td>"+
       "<td>"+(g.carPark?"✓":"–")+"</td>"+
       "<td>"+(g.trailer?"✓":"–")+"</td>"+
@@ -1060,6 +1108,43 @@ function escapeHtml(s){
   return String(s==null?"":s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 }
 
+let editingWishes = [];
+
+function renderWishRows(){
+  const container = document.getElementById("groupWishesContainer");
+  container.innerHTML = "";
+  editingWishes.forEach((w, idx) => {
+    const row = document.createElement("div");
+    row.className = "wish-row";
+    let options = '<option value="">Beliebiger Ort</option>';
+    state.locations.forEach(loc => {
+      options += '<option value="'+loc.id+'" '+(w.locationId===loc.id?"selected":"")+'>'+escapeHtml(loc.name)+'</option>';
+    });
+    row.innerHTML =
+      '<select class="wish-loc" data-wish-idx="'+idx+'" data-wish-field="locationId">'+options+'</select>'+
+      '<input type="time" class="wish-time" data-wish-idx="'+idx+'" data-wish-field="time" value="'+(w.time||"")+'">'+
+      '<input type="text" class="wish-note" data-wish-idx="'+idx+'" data-wish-field="note" placeholder="Bemerkung (optional)" value="'+escapeHtml(w.note||"")+'">'+
+      '<button type="button" class="btn btn-danger btn-small" data-wish-remove="'+idx+'">×</button>';
+    container.appendChild(row);
+  });
+
+  container.querySelectorAll("[data-wish-field]").forEach(inp => {
+    const evt = inp.tagName === "SELECT" || inp.type === "time" ? "change" : "input";
+    inp.addEventListener(evt, () => {
+      const idx = parseInt(inp.getAttribute("data-wish-idx"),10);
+      const field = inp.getAttribute("data-wish-field");
+      editingWishes[idx][field] = inp.value;
+    });
+  });
+  container.querySelectorAll("[data-wish-remove]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const idx = parseInt(btn.getAttribute("data-wish-remove"),10);
+      editingWishes.splice(idx,1);
+      renderWishRows();
+    });
+  });
+}
+
 function openGroupModal(id){
   const modal = document.getElementById("groupModalOverlay");
   const g = id ? getGroup(id) : null;
@@ -1080,6 +1165,8 @@ function openGroupModal(id){
   document.getElementById("gPrName").value = g ? g.president.name : "";
   document.getElementById("gPrPhone").value = g ? g.president.phone : "";
   document.getElementById("gPrMail").value = g ? g.president.email : "";
+  editingWishes = g && Array.isArray(g.wishes) ? g.wishes.map(w => ({...w})) : [];
+  renderWishRows();
   modal.classList.add("active");
 }
 
@@ -1108,7 +1195,8 @@ function saveGroupFromModal(){
       name: document.getElementById("gPrName").value.trim(),
       phone: document.getElementById("gPrPhone").value.trim(),
       email: document.getElementById("gPrMail").value.trim()
-    }
+    },
+    wishes: editingWishes.map(w => ({id:w.id, locationId:w.locationId||"", time:w.time||"", note:(w.note||"").trim()}))
   };
 
   if(id){
@@ -1159,7 +1247,8 @@ function renderPlanung(){
 
   state.groups.forEach(g => {
     html += '<tr class="'+(g.type==="Stamm"?"row-stamm":"row-gast")+'">';
-    html += '<td class="group-name-cell">'+escapeHtml(g.name)+"</td>";
+    const hasWishes = g.wishes && g.wishes.length;
+    html += '<td class="group-name-cell"'+(hasWishes?' title="Wünsche: '+escapeHtml(wishesSummary(g))+'"':"")+'>'+escapeHtml(g.name)+(hasWishes?" 📍":"")+"</td>";
 
     state.locations.forEach(loc => {
       const key = g.id+"|"+loc.id;
@@ -1601,6 +1690,10 @@ function initTabs(){
 
 function initEvents(){
   document.getElementById("btnAddGroup").addEventListener("click", () => openGroupModal(null));
+  document.getElementById("btnAddWish").addEventListener("click", () => {
+    editingWishes.push({id: uid("wish"), locationId:"", time:"", note:""});
+    renderWishRows();
+  });
   document.getElementById("btnSaveGroup").addEventListener("click", saveGroupFromModal);
 
   document.getElementById("btnGeneratePlan").addEventListener("click", generatePlan);
