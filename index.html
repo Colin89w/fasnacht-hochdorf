@@ -3,31 +3,38 @@
 <head>
 <meta charset="UTF-8">
 <title>Fasnacht Hofdere – Guggenmusik Planer</title>
+<link rel="icon" type="image/svg+xml" href="https://www.fasnacht-hofdere.ch/wp-content/uploads/2023/02/fasnacht_hofdere_logo_color2.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Yesteryear&family=Work+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
 :root{
-  --dark-red:#8B0000;
-  --dark-red-light:#a81111;
-  --gold:#DAA520;
-  --gold-light:#f0d27a;
-  --cream:#FFF8E7;
-  --ink:#2a1a10;
-  --border:#d8c9a3;
+  --dark-red:#FF4858;
+  --dark-red-light:#ff6b78;
+  --gold:#DBF227;
+  --gold-light:#f2fab0;
+  --teal:#48A9A6;
+  --cream:#FFFFFF;
+  --ink:#414042;
+  --border:#E5E5E5;
   --danger:#c0392b;
   --ok:#2e7d32;
   --warn:#e67e22;
+  --font-display:"Yesteryear",cursive;
+  --font-body:"Work Sans",Arial,sans-serif;
 }
 *{box-sizing:border-box;}
 body{
   margin:0;
-  font-family:"Segoe UI",Arial,sans-serif;
+  font-family:var(--font-body);
   background:var(--cream);
   color:var(--ink);
   min-width:1280px;
 }
 header{
   background:var(--dark-red);
-  color:var(--cream);
-  padding:14px 24px;
+  color:#fff;
+  padding:10px 24px;
   display:flex;
   align-items:center;
   justify-content:space-between;
@@ -35,12 +42,14 @@ header{
 }
 header h1{
   margin:0;
-  font-size:22px;
+  font-family:var(--font-display);
+  font-size:40px;
+  font-weight:400;
   letter-spacing:.5px;
 }
 header .sub{
   font-size:13px;
-  color:var(--gold-light);
+  color:rgba(255,255,255,.85);
   margin-top:2px;
 }
 .icon-btn{
@@ -58,15 +67,16 @@ header .sub{
 
 nav.tabs{
   display:flex;
-  background:#5c0000;
+  background:var(--ink);
   padding:0 16px;
 }
 nav.tabs button{
   background:transparent;
   border:none;
-  color:#e8c9a0;
+  color:#cfcfcf;
   padding:14px 22px;
   font-size:15px;
+  font-family:var(--font-body);
   cursor:pointer;
   border-bottom:3px solid transparent;
   transition:.15s;
@@ -82,7 +92,7 @@ main{padding:22px 26px 60px;}
 .tab-content{display:none;}
 .tab-content.active{display:block;}
 
-h2{color:var(--dark-red);border-bottom:2px solid var(--gold);padding-bottom:6px;margin-top:0;}
+h2{font-family:var(--font-display);font-weight:400;font-size:34px;color:var(--dark-red);border-bottom:2px solid var(--gold);padding-bottom:6px;margin-top:0;}
 h3{color:var(--dark-red);}
 
 .toolbar{display:flex;gap:10px;align-items:center;margin-bottom:16px;flex-wrap:wrap;}
@@ -92,16 +102,17 @@ h3{color:var(--dark-red);}
   color:#fff;
   border:none;
   padding:10px 18px;
-  border-radius:6px;
+  border-radius:4px;
   cursor:pointer;
   font-size:14px;
+  letter-spacing:.3px;
   transition:.15s;
 }
 .btn:hover{background:var(--dark-red-light);}
 .btn-gold{background:var(--gold);color:var(--ink);font-weight:700;}
-.btn-gold:hover{background:#c79418;}
+.btn-gold:hover{background:#c3d61f;}
 .btn-secondary{background:#fff;color:var(--dark-red);border:2px solid var(--dark-red);padding:8px 16px;}
-.btn-secondary:hover{background:#fbeee0;}
+.btn-secondary:hover{background:#ffeef0;}
 .btn-danger{background:var(--danger);}
 .btn-danger:hover{background:#a5311f;}
 .btn-big{
@@ -126,10 +137,10 @@ table td{
   border-bottom:1px solid var(--border);
   font-size:14px;
 }
-table tr.row-stamm{background:#fbf0cf;}
-table tr.row-stamm:hover{background:#f7e6b0;}
+table tr.row-stamm{background:#f5fbd1;}
+table tr.row-stamm:hover{background:#eaf7a8;}
 table tr.row-gast{background:#fff;}
-table tr.row-gast:hover{background:#fdf6ea;}
+table tr.row-gast:hover{background:#fafafa;}
 
 .badge{
   display:inline-block;
