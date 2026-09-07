@@ -304,12 +304,28 @@ td.conflict .warn-icon{color:var(--danger);margin-right:4px;cursor:help;}
 </head>
 <body>
 
+<div id="loginGate" style="position:fixed;inset:0;background:var(--dark-red);display:flex;align-items:center;justify-content:center;z-index:9999;">
+  <form id="loginForm" style="background:var(--cream);padding:32px 36px;border-radius:10px;box-shadow:0 8px 30px rgba(0,0,0,.4);min-width:320px;">
+    <h2 style="margin:0 0 6px;color:var(--dark-red);">Fasnacht Hofdere</h2>
+    <div style="font-size:13px;color:#665;margin-bottom:20px;">Bitte melde dich an, um die Planung zu sehen.</div>
+    <label style="display:block;font-size:13px;margin-bottom:4px;">Passwort</label>
+    <input type="password" id="loginPassword" required style="width:100%;padding:10px;border:1px solid var(--border);border-radius:6px;box-sizing:border-box;margin-bottom:12px;">
+    <div id="loginError" style="color:var(--danger);font-size:13px;margin-bottom:12px;display:none;"></div>
+    <button type="submit" class="btn btn-gold" id="btnLoginSubmit" style="width:100%;">Anmelden</button>
+  </form>
+</div>
+
+<div id="appRoot" style="display:none;">
+
 <header>
   <div>
     <h1 id="eventTitle">Fasnacht Hofdere</h1>
     <div class="sub" id="eventSubtitle">Guggenmusik Veranstaltungsplanung</div>
   </div>
-  <button class="icon-btn" id="btnSettings" title="Einstellungen">⚙</button>
+  <div style="display:flex;gap:10px;align-items:center;">
+    <button class="icon-btn" id="btnLogout" title="Abmelden">⎋</button>
+    <button class="icon-btn" id="btnSettings" title="Einstellungen">⚙</button>
+  </div>
 </header>
 
 <nav class="tabs">
@@ -526,8 +542,35 @@ td.conflict .warn-icon{color:var(--danger);margin-right:4px;cursor:help;}
   </div>
 </div>
 
-<script>
-"use strict";
+</div><!-- /#appRoot -->
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js";
+import {
+  getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut
+} from "https://www.gstatic.com/firebasejs/11.6.0/firebase-auth.js";
+import {
+  getFirestore, doc, getDoc, setDoc, onSnapshot
+} from "https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyAVpJpDyWtYrfdiXGOAOUAKbWdocZy2yJY",
+  authDomain: "fasnacht-hofdere.firebaseapp.com",
+  projectId: "fasnacht-hofdere",
+  storageBucket: "fasnacht-hofdere.firebasestorage.app",
+  messagingSenderId: "172563317057",
+  appId: "1:172563317057:web:c25545936869973598a1c0"
+};
+const SHARED_LOGIN_EMAIL = "guggen@fasnacht-hofdere.ch";
+
+const fbApp = initializeApp(firebaseConfig);
+const auth = getAuth(fbApp);
+const db = getFirestore(fbApp);
+const sharedStateRef = doc(db, "fasnachtPlaner", "sharedState");
+
+let applyingRemoteUpdate = false;
+let saveDebounceTimer = null;
+let unsubscribeSnapshot = null;
 
 /* ======================================================================
    DATENMODELL / DEFAULTS
@@ -570,26 +613,91 @@ function createDefaultState(){
 const STORAGE_KEY = "fasnachtHofdereState";
 let state = null;
 
+function normalizeState(parsed){
+  const def = createDefaultState();
+  const s = Object.assign(def, parsed);
+  if(!s.locations || !s.locations.length) s.locations = def.locations;
+  if(!s.battles || s.battles.length !== 9) s.battles = def.battles;
+  if(!s.groups) s.groups = [];
+  if(!s.plan) s.plan = {};
+  if(!s.umzug) s.umzug = [];
+  return s;
+}
+
 function saveState(){
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  if(applyingRemoteUpdate) return;
+  clearTimeout(saveDebounceTimer);
+  saveDebounceTimer = setTimeout(pushStateToFirestore, 800);
+}
+
+function pushStateToFirestore(){
+  if(!auth.currentUser) return;
+  setDoc(sharedStateRef, state).catch(e => console.error("Konnte Daten nicht mit Firestore synchronisieren.", e));
 }
 
 function loadState(){
   const raw = localStorage.getItem(STORAGE_KEY);
   if(!raw){ state = createDefaultState(); return; }
   try{
-    const parsed = JSON.parse(raw);
-    const def = createDefaultState();
-    state = Object.assign(def, parsed);
-    if(!state.locations || !state.locations.length) state.locations = def.locations;
-    if(!state.battles || state.battles.length !== 9) state.battles = def.battles;
-    if(!state.groups) state.groups = [];
-    if(!state.plan) state.plan = {};
-    if(!state.umzug) state.umzug = [];
+    state = normalizeState(JSON.parse(raw));
   }catch(e){
     console.error("Konnte gespeicherte Daten nicht lesen, verwende Standardzustand.", e);
     state = createDefaultState();
   }
+}
+
+function isFormFieldFocused(){
+  const el = document.activeElement;
+  if(!el) return false;
+  const tag = el.tagName;
+  return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
+}
+
+function startFirestoreSync(){
+  if(unsubscribeSnapshot) unsubscribeSnapshot();
+  unsubscribeSnapshot = onSnapshot(sharedStateRef, (snap) => {
+    if(!snap.exists()){
+      pushStateToFirestore();
+      return;
+    }
+    if(snap.metadata.hasPendingWrites) return;
+    if(isFormFieldFocused()) return;
+    applyingRemoteUpdate = true;
+    state = normalizeState(snap.data());
+    saveState();
+    renderAll();
+    applyingRemoteUpdate = false;
+  }, (err) => {
+    console.error("Firestore-Sync-Fehler.", err);
+  });
+}
+
+function stopFirestoreSync(){
+  if(unsubscribeSnapshot){ unsubscribeSnapshot(); unsubscribeSnapshot = null; }
+}
+
+function showApp(){
+  document.getElementById("loginGate").style.display = "none";
+  document.getElementById("appRoot").style.display = "";
+}
+
+function showLoginGate(){
+  document.getElementById("loginGate").style.display = "flex";
+  document.getElementById("appRoot").style.display = "none";
+}
+
+async function initialLoadFromFirestore(){
+  try{
+    const snap = await getDoc(sharedStateRef);
+    if(snap.exists()){
+      state = normalizeState(snap.data());
+    }
+  }catch(e){
+    console.error("Konnte Firestore-Daten nicht laden, verwende lokalen Stand.", e);
+  }
+  saveState();
+  renderAll();
 }
 
 /* ======================================================================
@@ -1403,13 +1511,7 @@ function importData(file){
     try{
       const parsed = JSON.parse(reader.result);
       if(!confirm("Import überschreibt alle aktuellen Daten. Fortfahren?")) return;
-      const def = createDefaultState();
-      state = Object.assign(def, parsed);
-      if(!state.locations || !state.locations.length) state.locations = def.locations;
-      if(!state.battles || state.battles.length!==9) state.battles = def.battles;
-      if(!state.groups) state.groups = [];
-      if(!state.plan) state.plan = {};
-      if(!state.umzug) state.umzug = [];
+      state = normalizeState(parsed);
       saveState();
       renderAll();
       renderSettingsModal();
@@ -1517,6 +1619,39 @@ loadState();
 initTabs();
 initEvents();
 renderAll();
+
+document.getElementById("loginForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const pw = document.getElementById("loginPassword").value;
+  const errEl = document.getElementById("loginError");
+  errEl.style.display = "none";
+  const btn = document.getElementById("btnLoginSubmit");
+  btn.disabled = true;
+  try{
+    await signInWithEmailAndPassword(auth, SHARED_LOGIN_EMAIL, pw);
+    document.getElementById("loginPassword").value = "";
+  }catch(err){
+    errEl.textContent = "Falsches Passwort oder Verbindungsfehler.";
+    errEl.style.display = "block";
+  }finally{
+    btn.disabled = false;
+  }
+});
+
+document.getElementById("btnLogout").addEventListener("click", () => {
+  signOut(auth);
+});
+
+onAuthStateChanged(auth, async (user) => {
+  if(user){
+    showApp();
+    await initialLoadFromFirestore();
+    startFirestoreSync();
+  }else{
+    stopFirestoreSync();
+    showLoginGate();
+  }
+});
 
 </script>
 </body>
