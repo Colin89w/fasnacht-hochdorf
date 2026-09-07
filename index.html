@@ -1,0 +1,1523 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<title>Fasnacht Hofdere – Guggenmusik Planer</title>
+<style>
+:root{
+  --dark-red:#8B0000;
+  --dark-red-light:#a81111;
+  --gold:#DAA520;
+  --gold-light:#f0d27a;
+  --cream:#FFF8E7;
+  --ink:#2a1a10;
+  --border:#d8c9a3;
+  --danger:#c0392b;
+  --ok:#2e7d32;
+  --warn:#e67e22;
+}
+*{box-sizing:border-box;}
+body{
+  margin:0;
+  font-family:"Segoe UI",Arial,sans-serif;
+  background:var(--cream);
+  color:var(--ink);
+  min-width:1280px;
+}
+header{
+  background:var(--dark-red);
+  color:var(--cream);
+  padding:14px 24px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  box-shadow:0 2px 6px rgba(0,0,0,.3);
+}
+header h1{
+  margin:0;
+  font-size:22px;
+  letter-spacing:.5px;
+}
+header .sub{
+  font-size:13px;
+  color:var(--gold-light);
+  margin-top:2px;
+}
+.icon-btn{
+  background:transparent;
+  border:2px solid var(--gold);
+  color:var(--gold);
+  font-size:20px;
+  width:40px;
+  height:40px;
+  border-radius:50%;
+  cursor:pointer;
+  transition:.15s;
+}
+.icon-btn:hover{background:var(--gold);color:var(--dark-red);}
+
+nav.tabs{
+  display:flex;
+  background:#5c0000;
+  padding:0 16px;
+}
+nav.tabs button{
+  background:transparent;
+  border:none;
+  color:#e8c9a0;
+  padding:14px 22px;
+  font-size:15px;
+  cursor:pointer;
+  border-bottom:3px solid transparent;
+  transition:.15s;
+}
+nav.tabs button:hover{color:var(--gold-light);}
+nav.tabs button.active{
+  color:var(--gold);
+  border-bottom:3px solid var(--gold);
+  font-weight:600;
+}
+
+main{padding:22px 26px 60px;}
+.tab-content{display:none;}
+.tab-content.active{display:block;}
+
+h2{color:var(--dark-red);border-bottom:2px solid var(--gold);padding-bottom:6px;margin-top:0;}
+h3{color:var(--dark-red);}
+
+.toolbar{display:flex;gap:10px;align-items:center;margin-bottom:16px;flex-wrap:wrap;}
+
+.btn{
+  background:var(--dark-red);
+  color:#fff;
+  border:none;
+  padding:10px 18px;
+  border-radius:6px;
+  cursor:pointer;
+  font-size:14px;
+  transition:.15s;
+}
+.btn:hover{background:var(--dark-red-light);}
+.btn-gold{background:var(--gold);color:var(--ink);font-weight:700;}
+.btn-gold:hover{background:#c79418;}
+.btn-secondary{background:#fff;color:var(--dark-red);border:2px solid var(--dark-red);padding:8px 16px;}
+.btn-secondary:hover{background:#fbeee0;}
+.btn-danger{background:var(--danger);}
+.btn-danger:hover{background:#a5311f;}
+.btn-big{
+  font-size:18px;
+  padding:16px 28px;
+  box-shadow:0 3px 8px rgba(0,0,0,.25);
+}
+.btn-small{padding:5px 10px;font-size:12px;}
+.btn:disabled{opacity:.5;cursor:not-allowed;}
+
+table{border-collapse:collapse;width:100%;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.1);}
+table th{
+  background:var(--dark-red);
+  color:#fff;
+  padding:9px 10px;
+  text-align:left;
+  font-size:13px;
+  position:sticky;top:0;
+}
+table td{
+  padding:8px 10px;
+  border-bottom:1px solid var(--border);
+  font-size:14px;
+}
+table tr.row-stamm{background:#fbf0cf;}
+table tr.row-stamm:hover{background:#f7e6b0;}
+table tr.row-gast{background:#fff;}
+table tr.row-gast:hover{background:#fdf6ea;}
+
+.badge{
+  display:inline-block;
+  padding:3px 9px;
+  border-radius:12px;
+  font-size:12px;
+  font-weight:700;
+  color:#fff;
+}
+.badge-green{background:var(--ok);}
+.badge-orange{background:var(--warn);}
+.badge-neutral{background:#888;}
+.tag-stamm{
+  background:var(--gold);
+  color:var(--ink);
+  padding:2px 8px;
+  border-radius:10px;
+  font-size:11px;
+  font-weight:700;
+}
+.tag-gast{
+  background:#ccc;
+  color:#333;
+  padding:2px 8px;
+  border-radius:10px;
+  font-size:11px;
+}
+
+.icon-action{
+  cursor:pointer;
+  font-size:16px;
+  margin-right:8px;
+  border:none;
+  background:transparent;
+}
+.icon-action:hover{transform:scale(1.15);}
+
+.summary-strip{
+  display:flex;
+  gap:14px;
+  margin-top:16px;
+  flex-wrap:wrap;
+}
+.stat-card{
+  background:#fff;
+  border:1px solid var(--border);
+  border-left:5px solid var(--gold);
+  padding:10px 16px;
+  border-radius:6px;
+  min-width:140px;
+}
+.stat-card .num{font-size:22px;font-weight:700;color:var(--dark-red);}
+.stat-card .lbl{font-size:12px;color:#555;}
+
+/* Modal */
+.modal-overlay{
+  display:none;
+  position:fixed;top:0;left:0;right:0;bottom:0;
+  background:rgba(0,0,0,.5);
+  z-index:100;
+  align-items:center;justify-content:center;
+}
+.modal-overlay.active{display:flex;}
+.modal-box{
+  background:var(--cream);
+  border-radius:10px;
+  width:640px;
+  max-height:88vh;
+  overflow-y:auto;
+  box-shadow:0 10px 40px rgba(0,0,0,.4);
+  border-top:6px solid var(--gold);
+}
+.modal-box.wide{width:820px;}
+.modal-header{
+  background:var(--dark-red);
+  color:#fff;
+  padding:14px 20px;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  border-radius:4px 4px 0 0;
+}
+.modal-header h3{color:#fff;margin:0;border:none;}
+.modal-header .close-x{cursor:pointer;font-size:22px;background:none;border:none;color:#fff;}
+.modal-body{padding:20px;}
+.modal-footer{
+  padding:14px 20px;
+  display:flex;
+  justify-content:flex-end;
+  gap:10px;
+  border-top:1px solid var(--border);
+}
+
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px 18px;}
+.form-grid .full{grid-column:1/-1;}
+.form-field label{display:block;font-size:12px;font-weight:600;color:var(--dark-red);margin-bottom:4px;}
+.form-field input[type=text],
+.form-field input[type=time],
+.form-field input[type=number],
+.form-field input[type=date],
+.form-field input[type=email],
+.form-field input[type=tel],
+.form-field select{
+  width:100%;
+  padding:8px;
+  border:1px solid var(--border);
+  border-radius:5px;
+  font-size:14px;
+  background:#fff;
+}
+.form-field.checkbox{display:flex;align-items:center;gap:8px;margin-top:18px;}
+.form-field.checkbox label{margin:0;font-size:13px;}
+fieldset{border:1px solid var(--border);border-radius:6px;margin-top:6px;grid-column:1/-1;}
+legend{color:var(--dark-red);font-weight:700;padding:0 6px;}
+
+select.slot-select{padding:5px;font-size:13px;border-radius:4px;border:1px solid var(--border);width:100%;}
+td.conflict{background:#fdd !important;position:relative;}
+td.conflict .warn-icon{color:var(--danger);margin-right:4px;cursor:help;}
+.battle-col{font-size:12px;color:#555;}
+
+.plan-table th, .plan-table td{white-space:nowrap;}
+.plan-table td.group-name-cell{font-weight:600;}
+
+.footer-note{margin-top:10px;font-size:13px;color:#555;}
+
+.umzug-list{list-style:none;padding:0;max-width:640px;}
+.umzug-list li{
+  background:#fff;
+  border:1px solid var(--border);
+  border-left:5px solid var(--gold);
+  padding:10px 14px;
+  margin-bottom:6px;
+  border-radius:6px;
+  display:flex;
+  align-items:center;
+  gap:12px;
+  cursor:grab;
+}
+.umzug-list li.dragging{opacity:.4;}
+.umzug-list li .num{font-weight:700;color:var(--dark-red);width:26px;}
+.umzug-list li .members{color:#777;font-size:12px;margin-left:auto;}
+.umzug-list li.excluded{opacity:.5;}
+
+.contact-list .contact-card{
+  background:#fff;border:1px solid var(--border);border-radius:6px;
+  padding:10px 14px;margin-bottom:8px;
+}
+.contact-list .contact-card b{color:var(--dark-red);}
+.contact-list a{color:var(--dark-red);text-decoration:none;}
+.contact-list a:hover{text-decoration:underline;}
+
+.settings-loc-row{display:flex;gap:8px;align-items:center;margin-bottom:8px;}
+.settings-loc-row input[type=text]{padding:7px;border:1px solid var(--border);border-radius:4px;}
+.settings-loc-row .loc-name{width:170px;}
+.settings-loc-row .loc-slots{flex:1;}
+
+.warning-banner{
+  background:#fdecea;border:1px solid var(--danger);color:var(--danger);
+  padding:10px 14px;border-radius:6px;margin-bottom:14px;font-size:14px;
+}
+
+.hint{font-size:12px;color:#777;margin-top:4px;}
+
+@media print{
+  header, nav.tabs, .toolbar, .modal-overlay, .icon-action, #tab-gruppen, #tab-battle, #tab-umzug, #tab-logistik{display:none !important;}
+  main{padding:0;}
+  #tab-planung{display:block !important;}
+  table{box-shadow:none;}
+  .badge{color:#000;background:none;border:1px solid #000;}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1 id="eventTitle">Fasnacht Hofdere</h1>
+    <div class="sub" id="eventSubtitle">Guggenmusik Veranstaltungsplanung</div>
+  </div>
+  <button class="icon-btn" id="btnSettings" title="Einstellungen">⚙</button>
+</header>
+
+<nav class="tabs">
+  <button class="tab-btn active" data-tab="tab-gruppen">Gruppen</button>
+  <button class="tab-btn" data-tab="tab-planung">Auftritte-Planung</button>
+  <button class="tab-btn" data-tab="tab-battle">Battle-Plan</button>
+  <button class="tab-btn" data-tab="tab-umzug">Umzug</button>
+  <button class="tab-btn" data-tab="tab-logistik">Logistik &amp; Kontakte</button>
+</nav>
+
+<main>
+
+  <!-- TAB 1: GRUPPEN -->
+  <section id="tab-gruppen" class="tab-content active">
+    <h2>Gruppen</h2>
+    <div class="toolbar">
+      <button class="btn btn-gold" id="btnAddGroup">＋ Gruppe hinzufügen</button>
+    </div>
+    <table id="groupsTable">
+      <thead>
+        <tr>
+          <th>Name</th><th>Typ</th><th>Anreise</th><th>Abreise</th>
+          <th>Ø Auftritte</th><th>Mitglieder</th><th>Parkplatz</th><th>Anhänger</th><th>Znacht</th>
+          <th>Tourmanager</th><th>Präsident</th><th></th>
+        </tr>
+      </thead>
+      <tbody id="groupsTbody"></tbody>
+    </table>
+    <div class="summary-strip" id="groupsSummary"></div>
+  </section>
+
+  <!-- TAB 2: PLANUNG -->
+  <section id="tab-planung" class="tab-content">
+    <h2>Auftritte-Planung</h2>
+    <div class="toolbar">
+      <button class="btn btn-big btn-gold" id="btnGeneratePlan">🎲 Grobplan generieren</button>
+      <button class="btn btn-secondary" id="btnSavePlan">💾 Speichern</button>
+      <button class="btn btn-secondary" id="btnResetPlan">↺ Zurücksetzen</button>
+      <button class="btn btn-secondary" id="btnPrintPlan">🖨 Drucken</button>
+    </div>
+    <div id="planWrapper"></div>
+    <div class="footer-note" id="planFooter"></div>
+  </section>
+
+  <!-- TAB 3: BATTLE -->
+  <section id="tab-battle" class="tab-content">
+    <h2>Battle-Plan</h2>
+    <div id="battleWarning"></div>
+    <table id="battleTable">
+      <thead>
+        <tr><th>Slot</th><th>Zeit</th><th>Gruppe 1</th><th>Gruppe 2</th></tr>
+      </thead>
+      <tbody id="battleTbody"></tbody>
+    </table>
+    <p class="hint">Battle-Zeiten blockieren die jeweiligen Gruppen automatisch im Grobplan-Algorithmus (Tab „Auftritte-Planung").</p>
+  </section>
+
+  <!-- TAB 4: UMZUG -->
+  <section id="tab-umzug" class="tab-content">
+    <h2>Umzug</h2>
+    <p class="hint">Reihenfolge per Drag &amp; Drop anpassen. Checkbox abwählen falls Gruppe nicht mitläuft.</p>
+    <ul class="umzug-list" id="umzugList"></ul>
+  </section>
+
+  <!-- TAB 5: LOGISTIK -->
+  <section id="tab-logistik" class="tab-content">
+    <h2>Logistik &amp; Kontakte</h2>
+    <h3>Parkplätze / Anhänger / Znachtessen</h3>
+    <table id="logisticsTable">
+      <thead>
+        <tr><th>Gruppe</th><th>Mitglieder</th><th>Parkplatz</th><th>Anhänger</th><th>Znachtessen</th></tr>
+      </thead>
+      <tbody id="logisticsTbody"></tbody>
+      <tfoot id="logisticsTfoot"></tfoot>
+    </table>
+
+    <h3 style="margin-top:30px;">Kontaktliste</h3>
+    <div class="toolbar">
+      <button class="btn btn-secondary" id="btnCopyContacts">📋 Alles kopieren</button>
+    </div>
+    <div class="contact-list" id="contactList"></div>
+  </section>
+
+</main>
+
+<!-- MODAL: Gruppe hinzufügen/bearbeiten -->
+<div class="modal-overlay" id="groupModalOverlay">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3 id="groupModalTitle">Gruppe hinzufügen</h3>
+      <button class="close-x" data-close="groupModalOverlay">×</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="gId">
+      <div class="form-grid">
+        <div class="form-field full">
+          <label>Name</label>
+          <input type="text" id="gName">
+        </div>
+        <div class="form-field">
+          <label>Typ</label>
+          <select id="gType">
+            <option value="Gast">Gast</option>
+            <option value="Stamm">Stammmitglied</option>
+          </select>
+        </div>
+        <div class="form-field">
+          <label>Mitgliederzahl</label>
+          <input type="number" id="gMembers" min="0" value="0">
+        </div>
+        <div class="form-field">
+          <label>Anreisezeit</label>
+          <input type="time" id="gArrival">
+        </div>
+        <div class="form-field">
+          <label>Abreisezeit</label>
+          <input type="time" id="gDeparture">
+        </div>
+        <div class="form-field">
+          <label>Gewünschte Auftritte (0 = egal)</label>
+          <input type="number" id="gDesired" min="0" value="0">
+        </div>
+        <div class="form-field checkbox">
+          <input type="checkbox" id="gCarPark"><label>Carparkplatz benötigt</label>
+        </div>
+        <div class="form-field checkbox">
+          <input type="checkbox" id="gTrailer"><label>Anhänger-Platz benötigt</label>
+        </div>
+        <div class="form-field checkbox">
+          <input type="checkbox" id="gDinner"><label>Znachtessen</label>
+        </div>
+
+        <fieldset>
+          <legend>Tourmanager</legend>
+          <div class="form-grid">
+            <div class="form-field"><label>Name</label><input type="text" id="gTmName"></div>
+            <div class="form-field"><label>Telefon</label><input type="tel" id="gTmPhone"></div>
+            <div class="form-field full"><label>Mail</label><input type="email" id="gTmMail"></div>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Präsident</legend>
+          <div class="form-grid">
+            <div class="form-field"><label>Name</label><input type="text" id="gPrName"></div>
+            <div class="form-field"><label>Telefon</label><input type="tel" id="gPrPhone"></div>
+            <div class="form-field full"><label>Mail</label><input type="email" id="gPrMail"></div>
+          </div>
+        </fieldset>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" data-close="groupModalOverlay">Abbrechen</button>
+      <button class="btn btn-gold" id="btnSaveGroup">Speichern</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Zusammenfassung nach Generierung -->
+<div class="modal-overlay" id="summaryModalOverlay">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3>Grobplan generiert</h3>
+      <button class="close-x" data-close="summaryModalOverlay">×</button>
+    </div>
+    <div class="modal-body" id="summaryModalBody"></div>
+    <div class="modal-footer">
+      <button class="btn btn-gold" data-close="summaryModalOverlay">Plan ansehen</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Einstellungen -->
+<div class="modal-overlay" id="settingsModalOverlay">
+  <div class="modal-box wide">
+    <div class="modal-header">
+      <h3>Einstellungen</h3>
+      <button class="close-x" data-close="settingsModalOverlay">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="form-field">
+          <label>Veranstaltungsname</label>
+          <input type="text" id="setEventName">
+        </div>
+        <div class="form-field">
+          <label>Datum</label>
+          <input type="date" id="setEventDate">
+        </div>
+        <div class="form-field">
+          <label>Mindestpuffer zwischen Auftritten (Min.)</label>
+          <input type="number" id="setBuffer" min="0" step="5">
+        </div>
+      </div>
+
+      <h3 style="margin-top:22px;">Standorte</h3>
+      <p class="hint">Zeitslots als kommagetrennte Liste, Format HH:MM (z.B. 20:00, 20:30, 21:00)</p>
+      <div id="settingsLocations"></div>
+      <button class="btn btn-secondary btn-small" id="btnAddLocation">＋ Standort hinzufügen</button>
+
+      <h3 style="margin-top:22px;">Daten</h3>
+      <div class="toolbar">
+        <button class="btn btn-secondary" id="btnExportData">⬇ Alle Daten exportieren</button>
+        <label class="btn btn-secondary" style="cursor:pointer;">
+          ⬆ Daten importieren
+          <input type="file" id="importFile" accept="application/json" style="display:none;">
+        </label>
+        <button class="btn btn-danger" id="btnDeleteAll">🗑 Alle Daten löschen</button>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-gold" data-close="settingsModalOverlay">Schliessen</button>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+
+/* ======================================================================
+   DATENMODELL / DEFAULTS
+   ====================================================================== */
+
+function createDefaultLocations(){
+  return [
+    {id:"brauisaal_nm",       name:"Brauisaal NM",      slots:["14:00","15:00","16:00","16:30"]},
+    {id:"brauiplatz_nm",      name:"Brauiplatz NM",     slots:["13:30","14:30","15:30","16:15"]},
+    {id:"brauisaal",          name:"Brauisaal",         slots:["19:30","20:00","21:00","22:00","23:00","00:00"]},
+    {id:"brauiplatz",         name:"Brauiplatz",        slots:["22:30","22:50","23:10","23:30"]},
+    {id:"kreisel",            name:"Kreisel",           slots:["20:00","20:30","21:00","21:30"]},
+    {id:"sproetzehuslizelt",  name:"Sprötzehüslizelt",  slots:["20:00","21:15","22:30","00:00"]},
+    {id:"partyhoette",        name:"Partyhötte",        slots:["20:00","20:45","21:30","22:15","23:00","23:45","00:30"]}
+  ];
+}
+
+function createDefaultBattles(){
+  // 9 fixed slots. Slot 0 = Sonderauftritt (mode 'gruppe' or 'freitext').
+  const arr = [];
+  for(let i=0;i<9;i++){
+    arr.push({mode: i===0 ? "freitext" : "gruppen", group1Id:"", group2Id:"", freeText:""});
+  }
+  return arr;
+}
+
+function createDefaultState(){
+  return {
+    eventName:"Fasnacht Hofdere",
+    eventDate:"",
+    minBuffer:30,
+    locations:createDefaultLocations(),
+    groups:[],
+    battles:createDefaultBattles(),
+    plan:{},      // { [groupId]: { [locationId]: "HH:MM" } }
+    umzug:[]      // [{groupId, included}]
+  };
+}
+
+const STORAGE_KEY = "fasnachtHofdereState";
+let state = null;
+
+function saveState(){
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+}
+
+function loadState(){
+  const raw = localStorage.getItem(STORAGE_KEY);
+  if(!raw){ state = createDefaultState(); return; }
+  try{
+    const parsed = JSON.parse(raw);
+    const def = createDefaultState();
+    state = Object.assign(def, parsed);
+    if(!state.locations || !state.locations.length) state.locations = def.locations;
+    if(!state.battles || state.battles.length !== 9) state.battles = def.battles;
+    if(!state.groups) state.groups = [];
+    if(!state.plan) state.plan = {};
+    if(!state.umzug) state.umzug = [];
+  }catch(e){
+    console.error("Konnte gespeicherte Daten nicht lesen, verwende Standardzustand.", e);
+    state = createDefaultState();
+  }
+}
+
+/* ======================================================================
+   ALLGEMEINE UTILITIES
+   ====================================================================== */
+
+function uid(prefix){
+  return prefix + "_" + Math.random().toString(36).slice(2,9) + Date.now().toString(36);
+}
+
+function getGroup(id){
+  return state.groups.find(g => g.id === id);
+}
+
+function getLocation(id){
+  return state.locations.find(l => l.id === id);
+}
+
+// Converts "HH:MM" to a comparable minute value. Since the event runs from
+// early afternoon into the following night, times between 00:00 and 05:59
+// are treated as occurring "after midnight" (i.e. later than 23:xx).
+function parseTimeToMinutes(t){
+  if(!t) return null;
+  const parts = t.split(":");
+  if(parts.length < 2) return null;
+  const h = parseInt(parts[0],10), m = parseInt(parts[1],10);
+  if(isNaN(h) || isNaN(m)) return null;
+  let mins = h*60+m;
+  if(h < 6) mins += 24*60;
+  return mins;
+}
+
+function minutesToLabel(mins){
+  let m = ((mins % 1440) + 1440) % 1440;
+  const h = Math.floor(m/60), mm = m%60;
+  return String(h).padStart(2,"0")+":"+String(mm).padStart(2,"0");
+}
+
+// Fixed battle slot time windows (slot 0 is the 10-minute "Sonderauftritt").
+function getBattleSlotTimes(){
+  const out = [{start:parseTimeToMinutes("19:30"), end:parseTimeToMinutes("19:40")}];
+  let cur = parseTimeToMinutes("19:40");
+  for(let i=1;i<=8;i++){
+    out.push({start:cur, end:cur+20});
+    cur += 20;
+  }
+  return out;
+}
+
+function battleSlotLabel(idx){
+  const t = getBattleSlotTimes()[idx];
+  return minutesToLabel(t.start) + "–" + minutesToLabel(t.end);
+}
+
+/* ======================================================================
+   GROBPLAN-ALGORITHMUS (generatePlan)
+   ------------------------------------------------------------------
+   Erzeugt automatisch eine Zuteilung von Gruppen auf Standort-Zeitslots.
+   Battle-Slots (Tab 3) werden als bereits fixierte Auftritte behandelt und
+   blockieren die betroffenen Gruppen. Der Rest wird per Greedy-Verfahren
+   zugeteilt: Stammmitglieder zuerst, danach nach Anzahl gewünschter
+   Auftritte absteigend sortiert. Für jede Gruppe werden nacheinander die
+   bestbewerteten freien Slots vergeben (Standortgrösse passend zur
+   Gruppengrösse, gleichmässige Auslastung der Standorte).
+
+   Vereinfachung: Ein Auftritt wird als Zeitpunkt-Ereignis behandelt
+   (keine explizite Dauer je Standort-Slot). Der Mindestpuffer wird daher
+   als Mindestabstand zwischen zwei Auftritts-Startzeiten derselben Gruppe
+   interpretiert. Wegzeiten zwischen Standorten werden nicht separat
+   modelliert; sie sind implizit im Mindestpuffer enthalten.
+   ====================================================================== */
+
+function generatePlan(){
+  const buffer = state.minBuffer || 30;
+  const battleTimes = getBattleSlotTimes();
+
+  // Neuer, leerer Plan (Standort-Zuteilungen). Battle-Zuteilungen bleiben
+  // unverändert in state.battles, sie werden hier nur gelesen.
+  const newPlan = {};
+  state.groups.forEach(g => newPlan[g.id] = {});
+
+  // 1) Battle-Slots zuerst setzen: sie blockieren die jeweiligen Gruppen.
+  const blocked = {}; // groupId -> [{start,end}]
+  state.groups.forEach(g => blocked[g.id] = []);
+  state.battles.forEach((b, idx) => {
+    const t = battleTimes[idx];
+    [b.group1Id, b.group2Id].forEach(gid => {
+      if(gid && blocked[gid]) blocked[gid].push({start:t.start, end:t.end});
+    });
+  });
+
+  // Belegung pro Standort+Zeitslot: locId -> { time: groupId }
+  const locUsage = {};
+  state.locations.forEach(loc => locUsage[loc.id] = {});
+
+  function locSizeCategory(loc){
+    if(/brauisaal|brauiplatz/i.test(loc.name)) return "big";
+    if(/kreisel|spr(ö|oe|o)tzeh(ü|ue|u)s|partyh(ö|oe|o)tte/i.test(loc.name)) return "small";
+    return "neutral";
+  }
+
+  function groupSizeCategory(g){
+    if(g.memberCount > 45) return "big";
+    if(g.memberCount < 30) return "small";
+    return "neutral";
+  }
+
+  // 2) Verfügbarkeit prüfen: innerhalb An-/Abreise, kein Pufferkonflikt.
+  function slotIsFreeForGroup(g, slotMin){
+    const arr = parseTimeToMinutes(g.arrival);
+    const dep = parseTimeToMinutes(g.departure);
+    if(arr !== null && slotMin < arr) return false;
+    if(dep !== null && slotMin > dep) return false;
+    for(const b of blocked[g.id]){
+      if(slotMin >= b.start - buffer && slotMin <= b.end + buffer) return false;
+    }
+    return true;
+  }
+
+  // 3) Gruppen sortieren: Stammmitglieder zuerst, dann Wunschanzahl absteigend.
+  const sortedGroups = state.groups.slice().sort((a,b) => {
+    if(a.type !== b.type) return a.type === "Stamm" ? -1 : 1;
+    return (b.desiredCount||0) - (a.desiredCount||0);
+  });
+
+  const unmet = []; // {group, assigned, target, reason}
+
+  // 4) Greedy-Zuteilung.
+  sortedGroups.forEach(g => {
+    const target = g.desiredCount || 0;
+    if(target <= 0) return; // "egal" -> Algorithmus erzwingt keine feste Anzahl
+
+    // Battle-Auftritte zählen bereits als erfüllter Teil des Wunsches, damit
+    // eine Gruppe mit Battle-Slot nicht mehr Auftritte bekommt als gewünscht.
+    const battleCount = blocked[g.id].length;
+    const remaining = Math.max(0, target - battleCount);
+
+    const wantedCategory = groupSizeCategory(g);
+    let assigned = 0;
+
+    for(let attempt = 0; attempt < remaining; attempt++){
+      let candidates = [];
+      state.locations.forEach(loc => {
+        const cat = locSizeCategory(loc);
+        const used = Object.keys(locUsage[loc.id]).length;
+        const total = loc.slots.length || 1;
+        loc.slots.forEach(timeStr => {
+          if(locUsage[loc.id][timeStr]) return; // Standort+Slot schon belegt (Constraint 3)
+          const slotMin = parseTimeToMinutes(timeStr);
+          if(slotMin === null) return;
+          if(!slotIsFreeForGroup(g, slotMin)) return; // Constraint 1 + 2 + 4
+          let score = 0;
+          if(cat === wantedCategory) score += 10;        // weicher Constraint 6/7
+          else if(cat === "neutral") score += 3;
+          score += (1 - used/total) * 5;                  // weicher Constraint 8: Auslastung ausgleichen
+          candidates.push({loc, timeStr, slotMin, score});
+        });
+      });
+
+      if(candidates.length === 0) break; // keine freien Slots mehr für diese Gruppe
+
+      candidates.sort((a,b) => b.score - a.score);
+      const choice = candidates[0];
+
+      newPlan[g.id][choice.loc.id] = choice.timeStr;
+      locUsage[choice.loc.id][choice.timeStr] = g.id;
+      blocked[g.id].push({start:choice.slotMin, end:choice.slotMin});
+      assigned++;
+    }
+
+    const totalAssigned = assigned + battleCount;
+    if(totalAssigned < target){
+      unmet.push({
+        group:g,
+        assigned: totalAssigned,
+        target,
+        reason: totalAssigned === 0
+          ? "Keine freien, passenden Slots im Zeitfenster " + (g.arrival||"?") + "–" + (g.departure||"?") + " gefunden."
+          : "Nur " + totalAssigned + " von " + target + " Wunsch-Auftritten (inkl. Battle) hatten im Zeitfenster " + (g.arrival||"?") + "–" + (g.departure||"?") + " noch freie, konfliktfreie Slots."
+      });
+    }
+  });
+
+  state.plan = newPlan;
+  saveState();
+
+  // 5) Zusammenfassung berechnen.
+  const freeSlots = [];
+  state.locations.forEach(loc => {
+    loc.slots.forEach(t => {
+      if(!locUsage[loc.id][t]) freeSlots.push(loc.name + " " + t);
+    });
+  });
+
+  const groupsWithWish = state.groups.filter(g => (g.desiredCount||0) > 0);
+  const fullyMetCount = groupsWithWish.filter(g => countGroupAssignments(g.id) >= g.desiredCount).length;
+
+  showSummaryModal({
+    totalGroupsWithWish: groupsWithWish.length,
+    fullyMetCount,
+    unmet,
+    freeSlots
+  });
+
+  renderPlanung();
+  renderBattle(); // Badges dort hängen auch von Zuteilungen ab
+}
+
+function countGroupAssignments(groupId){
+  let count = 0;
+  const assignments = state.plan[groupId] || {};
+  Object.values(assignments).forEach(v => { if(v) count++; });
+  state.battles.forEach(b => {
+    if(b.group1Id === groupId || b.group2Id === groupId) count++;
+  });
+  return count;
+}
+
+/* ======================================================================
+   KONFLIKTERKENNUNG (Tab 2 – Planungsgrid)
+   ====================================================================== */
+
+function computeConflicts(){
+  // key "groupId|locationId" -> [message,...]
+  const conflicts = {};
+  function addConflict(key, msg){
+    if(!conflicts[key]) conflicts[key] = [];
+    conflicts[key].push(msg);
+  }
+
+  const buffer = state.minBuffer || 30;
+  const battleTimes = getBattleSlotTimes();
+
+  // Standort+Zeit Doppelbelegung (Constraint 3)
+  const locUsage = {}; // locId -> time -> [groupIds]
+  state.locations.forEach(l => locUsage[l.id] = {});
+  state.groups.forEach(g => {
+    const assignments = state.plan[g.id] || {};
+    Object.entries(assignments).forEach(([locId, time]) => {
+      if(!time) return;
+      if(!locUsage[locId][time]) locUsage[locId][time] = [];
+      locUsage[locId][time].push(g.id);
+    });
+  });
+  Object.entries(locUsage).forEach(([locId, times]) => {
+    Object.entries(times).forEach(([time, gids]) => {
+      if(gids.length > 1){
+        gids.forEach(gid => {
+          const other = gids.filter(x => x!==gid).map(x => getGroup(x)? getGroup(x).name : "?").join(", ");
+          addConflict(gid+"|"+locId, "Standort/Zeit "+time+" bereits belegt durch: "+other);
+        });
+      }
+    });
+  });
+
+  // Pro Gruppe: Zeitfenster + Pufferkonflikte (Constraint 1 + 2), inkl. Battles
+  state.groups.forEach(g => {
+    const arr = parseTimeToMinutes(g.arrival);
+    const dep = parseTimeToMinutes(g.departure);
+    const events = []; // {locId|null, time, min, label}
+
+    const assignments = state.plan[g.id] || {};
+    Object.entries(assignments).forEach(([locId, time]) => {
+      if(!time) return;
+      const min = parseTimeToMinutes(time);
+      events.push({locId, time, min, label:(getLocation(locId)||{}).name+" "+time});
+    });
+    state.battles.forEach((b, idx) => {
+      if(b.group1Id === g.id || b.group2Id === g.id){
+        events.push({locId:null, battleIdx:idx, min:battleTimes[idx].start, label:"Battle Slot "+(idx+1)});
+      }
+    });
+
+    events.forEach(ev => {
+      if(ev.locId === null) return; // Battle-Konflikte separat in Tab 3 markiert
+      if(arr !== null && ev.min < arr){
+        addConflict(g.id+"|"+ev.locId, "Vor Anreisezeit ("+g.arrival+")");
+      }
+      if(dep !== null && ev.min > dep){
+        addConflict(g.id+"|"+ev.locId, "Nach Abreisezeit ("+g.departure+")");
+      }
+    });
+
+    for(let i=0;i<events.length;i++){
+      for(let j=i+1;j<events.length;j++){
+        const a = events[i], b = events[j];
+        if(Math.abs(a.min - b.min) < buffer){
+          if(a.locId) addConflict(g.id+"|"+a.locId, "Zu wenig Puffer zu "+b.label+" (min. "+buffer+" Min. nötig)");
+          if(b.locId) addConflict(g.id+"|"+b.locId, "Zu wenig Puffer zu "+a.label+" (min. "+buffer+" Min. nötig)");
+        }
+      }
+    }
+  });
+
+  return conflicts;
+}
+
+/* ======================================================================
+   TAB 1: GRUPPEN
+   ====================================================================== */
+
+function renderGroups(){
+  const tbody = document.getElementById("groupsTbody");
+  tbody.innerHTML = "";
+  state.groups.forEach(g => {
+    const tr = document.createElement("tr");
+    tr.className = g.type === "Stamm" ? "row-stamm" : "row-gast";
+    tr.innerHTML =
+      "<td>"+escapeHtml(g.name)+"</td>"+
+      "<td>"+(g.type==="Stamm" ? '<span class="tag-stamm">Stamm</span>' : '<span class="tag-gast">Gast</span>')+"</td>"+
+      "<td>"+(g.arrival||"–")+"</td>"+
+      "<td>"+(g.departure||"–")+"</td>"+
+      "<td>"+(g.desiredCount>0 ? g.desiredCount : "egal")+"</td>"+
+      "<td>"+g.memberCount+"</td>"+
+      "<td>"+(g.carPark?"✓":"–")+"</td>"+
+      "<td>"+(g.trailer?"✓":"–")+"</td>"+
+      "<td>"+(g.dinner?"✓":"–")+"</td>"+
+      "<td>"+escapeHtml(g.tourManager.name||"–")+"</td>"+
+      "<td>"+escapeHtml(g.president.name||"–")+"</td>"+
+      "<td>"+
+        '<button class="icon-action" title="Bearbeiten" data-edit="'+g.id+'">✏️</button>'+
+        '<button class="icon-action" title="Löschen" data-del="'+g.id+'">🗑️</button>'+
+      "</td>";
+    tbody.appendChild(tr);
+  });
+
+  document.querySelectorAll("[data-edit]").forEach(btn => {
+    btn.addEventListener("click", () => openGroupModal(btn.getAttribute("data-edit")));
+  });
+  document.querySelectorAll("[data-del]").forEach(btn => {
+    btn.addEventListener("click", () => deleteGroup(btn.getAttribute("data-del")));
+  });
+
+  const totalMembers = state.groups.reduce((s,g)=>s+(g.memberCount||0),0);
+  const totalPark = state.groups.filter(g=>g.carPark).length;
+  const totalTrailer = state.groups.filter(g=>g.trailer).length;
+  const totalDinner = state.groups.filter(g=>g.dinner).length;
+
+  document.getElementById("groupsSummary").innerHTML = [
+    ["Gruppen total", state.groups.length],
+    ["Mitglieder total", totalMembers],
+    ["Carparkplätze", totalPark],
+    ["Anhänger", totalTrailer],
+    ["Znachtessen", totalDinner]
+  ].map(([lbl,num]) => '<div class="stat-card"><div class="num">'+num+'</div><div class="lbl">'+lbl+'</div></div>').join("");
+}
+
+function escapeHtml(s){
+  return String(s==null?"":s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+}
+
+function openGroupModal(id){
+  const modal = document.getElementById("groupModalOverlay");
+  const g = id ? getGroup(id) : null;
+  document.getElementById("groupModalTitle").textContent = g ? "Gruppe bearbeiten" : "Gruppe hinzufügen";
+  document.getElementById("gId").value = g ? g.id : "";
+  document.getElementById("gName").value = g ? g.name : "";
+  document.getElementById("gType").value = g ? g.type : "Gast";
+  document.getElementById("gMembers").value = g ? g.memberCount : 0;
+  document.getElementById("gArrival").value = g ? g.arrival : "";
+  document.getElementById("gDeparture").value = g ? g.departure : "";
+  document.getElementById("gDesired").value = g ? g.desiredCount : 0;
+  document.getElementById("gCarPark").checked = g ? g.carPark : false;
+  document.getElementById("gTrailer").checked = g ? g.trailer : false;
+  document.getElementById("gDinner").checked = g ? g.dinner : false;
+  document.getElementById("gTmName").value = g ? g.tourManager.name : "";
+  document.getElementById("gTmPhone").value = g ? g.tourManager.phone : "";
+  document.getElementById("gTmMail").value = g ? g.tourManager.email : "";
+  document.getElementById("gPrName").value = g ? g.president.name : "";
+  document.getElementById("gPrPhone").value = g ? g.president.phone : "";
+  document.getElementById("gPrMail").value = g ? g.president.email : "";
+  modal.classList.add("active");
+}
+
+function saveGroupFromModal(){
+  const id = document.getElementById("gId").value;
+  const name = document.getElementById("gName").value.trim();
+  if(!name){ alert("Bitte einen Namen eingeben."); return; }
+
+  const data = {
+    id: id || uid("grp"),
+    name,
+    type: document.getElementById("gType").value,
+    memberCount: parseInt(document.getElementById("gMembers").value,10) || 0,
+    arrival: document.getElementById("gArrival").value,
+    departure: document.getElementById("gDeparture").value,
+    desiredCount: parseInt(document.getElementById("gDesired").value,10) || 0,
+    carPark: document.getElementById("gCarPark").checked,
+    trailer: document.getElementById("gTrailer").checked,
+    dinner: document.getElementById("gDinner").checked,
+    tourManager:{
+      name: document.getElementById("gTmName").value.trim(),
+      phone: document.getElementById("gTmPhone").value.trim(),
+      email: document.getElementById("gTmMail").value.trim()
+    },
+    president:{
+      name: document.getElementById("gPrName").value.trim(),
+      phone: document.getElementById("gPrPhone").value.trim(),
+      email: document.getElementById("gPrMail").value.trim()
+    }
+  };
+
+  if(id){
+    const idx = state.groups.findIndex(g=>g.id===id);
+    state.groups[idx] = data;
+  } else {
+    state.groups.push(data);
+    state.umzug.push({groupId:data.id, included:true});
+  }
+  syncUmzugWithGroups();
+  saveState();
+  closeModal("groupModalOverlay");
+  renderAll();
+}
+
+function deleteGroup(id){
+  const g = getGroup(id);
+  if(!g) return;
+  if(!confirm('Gruppe "'+g.name+'" wirklich löschen? Alle Zuteilungen dieser Gruppe werden entfernt.')) return;
+  state.groups = state.groups.filter(x=>x.id!==id);
+  delete state.plan[id];
+  state.battles.forEach(b => {
+    if(b.group1Id===id) b.group1Id="";
+    if(b.group2Id===id) b.group2Id="";
+  });
+  state.umzug = state.umzug.filter(u=>u.groupId!==id);
+  saveState();
+  renderAll();
+}
+
+/* ======================================================================
+   TAB 2: PLANUNG
+   ====================================================================== */
+
+function renderPlanung(){
+  const wrapper = document.getElementById("planWrapper");
+  if(state.groups.length===0){
+    wrapper.innerHTML = '<p class="hint">Noch keine Gruppen erfasst. Bitte zuerst im Tab „Gruppen" welche hinzufügen.</p>';
+    document.getElementById("planFooter").innerHTML = "";
+    return;
+  }
+
+  const conflicts = computeConflicts();
+
+  let html = '<table class="plan-table"><thead><tr><th>Gruppe</th>';
+  state.locations.forEach(loc => html += "<th>"+escapeHtml(loc.name)+"</th>");
+  html += "<th>Battle</th><th>Auftritte</th></tr></thead><tbody>";
+
+  state.groups.forEach(g => {
+    html += '<tr class="'+(g.type==="Stamm"?"row-stamm":"row-gast")+'">';
+    html += '<td class="group-name-cell">'+escapeHtml(g.name)+"</td>";
+
+    state.locations.forEach(loc => {
+      const key = g.id+"|"+loc.id;
+      const hasConflict = !!conflicts[key];
+      const currentVal = (state.plan[g.id] && state.plan[g.id][loc.id]) || "";
+      html += '<td class="'+(hasConflict?"conflict":"")+'" '+(hasConflict?'title="'+escapeHtml(conflicts[key].join(" | "))+'"':"")+'>';
+      if(hasConflict) html += '<span class="warn-icon">⚠️</span>';
+      html += '<select class="slot-select" data-group="'+g.id+'" data-loc="'+loc.id+'">';
+      html += '<option value="">–</option>';
+      loc.slots.forEach(t => {
+        html += '<option value="'+t+'" '+(currentVal===t?"selected":"")+'>'+t+'</option>';
+      });
+      html += "</select></td>";
+    });
+
+    // Battle-Spalte (read-only, aus Tab 3)
+    const battleEntries = [];
+    state.battles.forEach((b, idx) => {
+      if(b.group1Id===g.id || b.group2Id===g.id){
+        battleEntries.push("Slot "+(idx+1)+" ("+battleSlotLabel(idx)+")");
+      }
+    });
+    html += '<td class="battle-col">'+(battleEntries.length ? battleEntries.join("<br>") : "–")+"</td>";
+
+    const assignedCount = countGroupAssignments(g.id);
+    const target = g.desiredCount||0;
+    let badge;
+    if(target===0){
+      badge = '<span class="badge badge-neutral">'+assignedCount+' Auftritte (kein Wunsch)</span>';
+    } else if(assignedCount >= target){
+      badge = '<span class="badge badge-green">'+assignedCount+' von '+target+' erfüllt</span>';
+    } else {
+      badge = '<span class="badge badge-orange">'+assignedCount+' von '+target+'</span>';
+    }
+    html += "<td>"+badge+"</td>";
+    html += "</tr>";
+  });
+
+  html += "</tbody></table>";
+  wrapper.innerHTML = html;
+
+  document.querySelectorAll(".slot-select").forEach(sel => {
+    sel.addEventListener("change", () => {
+      const gid = sel.getAttribute("data-group");
+      const locid = sel.getAttribute("data-loc");
+      if(!state.plan[gid]) state.plan[gid] = {};
+      state.plan[gid][locid] = sel.value;
+      saveState();
+      renderPlanung();
+    });
+  });
+
+  // Fusszeile: belegte / Total Slots pro Standort
+  const footParts = state.locations.map(loc => {
+    const total = loc.slots.length;
+    const usedTimes = new Set();
+    state.groups.forEach(g => {
+      const t = state.plan[g.id] && state.plan[g.id][loc.id];
+      if(t) usedTimes.add(t);
+    });
+    return escapeHtml(loc.name)+": "+usedTimes.size+" / "+total;
+  });
+  document.getElementById("planFooter").innerHTML = "<strong>Belegung pro Standort:</strong> " + footParts.join(" &nbsp;|&nbsp; ");
+}
+
+function showSummaryModal(summary){
+  const body = document.getElementById("summaryModalBody");
+  let html = '<div class="summary-strip">';
+  html += '<div class="stat-card"><div class="num">'+summary.fullyMetCount+' / '+summary.totalGroupsWithWish+'</div><div class="lbl">Gruppen mit Wunsch voll erfüllt</div></div>';
+  html += '<div class="stat-card"><div class="num">'+summary.freeSlots.length+'</div><div class="lbl">Freie Slots übrig</div></div>';
+  html += '<div class="stat-card"><div class="num">'+summary.unmet.length+'</div><div class="lbl">Gruppen mit offenen Wünschen</div></div>';
+  html += "</div>";
+
+  if(summary.unmet.length){
+    html += "<h3>Nicht vollständig erfüllt</h3><ul>";
+    summary.unmet.forEach(u => {
+      html += "<li><b>"+escapeHtml(u.group.name)+"</b>: "+u.assigned+" von "+u.target+" — "+escapeHtml(u.reason)+"</li>";
+    });
+    html += "</ul>";
+  } else {
+    html += "<p>Alle Gruppen mit einem Auftritts-Wunsch wurden vollständig eingeteilt.</p>";
+  }
+
+  if(summary.freeSlots.length){
+    html += "<h3>Noch freie Slots</h3><p class='hint'>"+summary.freeSlots.map(escapeHtml).join(", ")+"</p>";
+  }
+
+  body.innerHTML = html;
+  document.getElementById("summaryModalOverlay").classList.add("active");
+}
+
+function resetPlan(){
+  if(!confirm("Alle Standort-Zuteilungen im Plan zurücksetzen? Battle-Zuteilungen bleiben erhalten.")) return;
+  state.groups.forEach(g => state.plan[g.id] = {});
+  saveState();
+  renderPlanung();
+}
+
+/* ======================================================================
+   TAB 3: BATTLE-PLAN
+   ====================================================================== */
+
+function groupOptionsHtml(selectedId){
+  let html = '<option value="">–</option>';
+  state.groups.forEach(g => {
+    html += '<option value="'+g.id+'" '+(g.id===selectedId?"selected":"")+'>'+escapeHtml(g.name)+'</option>';
+  });
+  return html;
+}
+
+function renderBattle(){
+  const tbody = document.getElementById("battleTbody");
+  tbody.innerHTML = "";
+
+  // Warnung: Gruppe in mehreren Battle-Slots
+  const count = {};
+  state.battles.forEach(b => {
+    [b.group1Id, b.group2Id].forEach(gid => { if(gid) count[gid] = (count[gid]||0)+1; });
+  });
+  const doubled = Object.entries(count).filter(([,c])=>c>1).map(([gid])=> getGroup(gid)?getGroup(gid).name:gid);
+  document.getElementById("battleWarning").innerHTML = doubled.length
+    ? '<div class="warning-banner">⚠️ Folgende Gruppen sind in mehreren Battle-Slots eingeteilt: '+doubled.map(escapeHtml).join(", ")+'</div>'
+    : "";
+
+  state.battles.forEach((b, idx) => {
+    const tr = document.createElement("tr");
+    const isSpecial = idx === 0;
+    const involvedDouble = (b.group1Id && count[b.group1Id]>1) || (b.group2Id && count[b.group2Id]>1);
+    if(involvedDouble) tr.classList.add("conflict");
+
+    let g1Cell, g2Cell;
+    if(isSpecial){
+      g1Cell =
+        '<select data-battle="'+idx+'" data-field="mode" class="slot-select" style="width:auto;display:inline-block;margin-right:6px;">'+
+          '<option value="freitext" '+(b.mode==="freitext"?"selected":"")+'>Freitext</option>'+
+          '<option value="gruppen" '+(b.mode==="gruppen"?"selected":"")+'>1 Gruppe</option>'+
+        '</select>';
+      if(b.mode==="freitext"){
+        g1Cell += '<input type="text" data-battle="'+idx+'" data-field="freeText" value="'+escapeHtml(b.freeText)+'" placeholder="z.B. Showeinlage" style="padding:6px;border:1px solid var(--border);border-radius:4px;width:220px;">';
+      } else {
+        g1Cell += '<select data-battle="'+idx+'" data-field="group1Id" class="slot-select" style="width:auto;display:inline-block;">'+groupOptionsHtml(b.group1Id)+'</select>';
+      }
+      g2Cell = '<span class="hint">Sonderauftritt – nur eine Gruppe</span>';
+    } else {
+      g1Cell = '<select data-battle="'+idx+'" data-field="group1Id" class="slot-select">'+groupOptionsHtml(b.group1Id)+'</select>';
+      g2Cell = '<select data-battle="'+idx+'" data-field="group2Id" class="slot-select">'+groupOptionsHtml(b.group2Id)+'</select>';
+    }
+
+    tr.innerHTML =
+      "<td>"+(isSpecial ? "Sonderauftritt" : "Slot "+idx)+"</td>"+
+      "<td>"+battleSlotLabel(idx)+"</td>"+
+      "<td>"+g1Cell+"</td>"+
+      "<td>"+g2Cell+"</td>";
+    tbody.appendChild(tr);
+  });
+
+  tbody.querySelectorAll("[data-battle]").forEach(el => {
+    el.addEventListener("change", () => {
+      const idx = parseInt(el.getAttribute("data-battle"),10);
+      const field = el.getAttribute("data-field");
+      state.battles[idx][field] = el.value;
+      saveState();
+      renderBattle();
+      renderPlanung();
+    });
+    if(el.tagName==="INPUT"){
+      el.addEventListener("input", () => {
+        const idx = parseInt(el.getAttribute("data-battle"),10);
+        state.battles[idx].freeText = el.value;
+        saveState();
+      });
+    }
+  });
+}
+
+/* ======================================================================
+   TAB 4: UMZUG
+   ====================================================================== */
+
+function syncUmzugWithGroups(){
+  const existingIds = new Set(state.umzug.map(u=>u.groupId));
+  state.groups.forEach(g => {
+    if(!existingIds.has(g.id)) state.umzug.push({groupId:g.id, included:true});
+  });
+  state.umzug = state.umzug.filter(u => getGroup(u.groupId));
+}
+
+let dragFromIndex = null;
+
+function renderUmzug(){
+  syncUmzugWithGroups();
+  const list = document.getElementById("umzugList");
+  list.innerHTML = "";
+
+  let num = 0;
+  state.umzug.forEach((entry, idx) => {
+    const g = getGroup(entry.groupId);
+    if(!g) return;
+    if(entry.included) num++;
+
+    const li = document.createElement("li");
+    li.draggable = true;
+    li.className = entry.included ? "" : "excluded";
+    li.setAttribute("data-index", idx);
+    li.innerHTML =
+      '<span class="num">'+(entry.included ? num : "–")+'</span>'+
+      '<input type="checkbox" data-umzug-check="'+idx+'" '+(entry.included?"checked":"")+'>'+
+      '<span>'+escapeHtml(g.name)+"</span>"+
+      '<span class="members">'+g.memberCount+' Mitglieder</span>';
+    list.appendChild(li);
+
+    li.addEventListener("dragstart", () => { dragFromIndex = idx; li.classList.add("dragging"); });
+    li.addEventListener("dragend", () => li.classList.remove("dragging"));
+    li.addEventListener("dragover", e => e.preventDefault());
+    li.addEventListener("drop", () => {
+      if(dragFromIndex===null || dragFromIndex===idx) return;
+      const moved = state.umzug.splice(dragFromIndex,1)[0];
+      state.umzug.splice(idx,0,moved);
+      dragFromIndex = null;
+      saveState();
+      renderUmzug();
+    });
+  });
+
+  list.querySelectorAll("[data-umzug-check]").forEach(cb => {
+    cb.addEventListener("change", () => {
+      const idx = parseInt(cb.getAttribute("data-umzug-check"),10);
+      state.umzug[idx].included = cb.checked;
+      saveState();
+      renderUmzug();
+    });
+  });
+}
+
+/* ======================================================================
+   TAB 5: LOGISTIK & KONTAKTE
+   ====================================================================== */
+
+function renderLogistik(){
+  const tbody = document.getElementById("logisticsTbody");
+  tbody.innerHTML = "";
+  state.groups.forEach(g => {
+    const tr = document.createElement("tr");
+    tr.className = g.type==="Stamm" ? "row-stamm" : "row-gast";
+    tr.innerHTML =
+      "<td>"+escapeHtml(g.name)+"</td>"+
+      "<td>"+g.memberCount+"</td>"+
+      "<td>"+(g.carPark?"✓":"–")+"</td>"+
+      "<td>"+(g.trailer?"✓":"–")+"</td>"+
+      "<td>"+(g.dinner?"✓":"–")+"</td>";
+    tbody.appendChild(tr);
+  });
+
+  const totalMembers = state.groups.reduce((s,g)=>s+(g.memberCount||0),0);
+  const totalPark = state.groups.filter(g=>g.carPark).length;
+  const totalTrailer = state.groups.filter(g=>g.trailer).length;
+  const totalDinner = state.groups.filter(g=>g.dinner).length;
+  document.getElementById("logisticsTfoot").innerHTML =
+    "<tr><th>Total</th><th>"+totalMembers+"</th><th>"+totalPark+"</th><th>"+totalTrailer+"</th><th>"+totalDinner+"</th></tr>";
+
+  const contactList = document.getElementById("contactList");
+  contactList.innerHTML = state.groups.map(g => {
+    return '<div class="contact-card">'+
+      "<b>"+escapeHtml(g.name)+"</b> "+(g.type==="Stamm"?'<span class="tag-stamm">Stamm</span>':'<span class="tag-gast">Gast</span>')+"<br>"+
+      "Tourmanager: "+escapeHtml(g.tourManager.name||"–")+
+        (g.tourManager.phone ? ' · <a href="tel:'+escapeHtml(g.tourManager.phone)+'">'+escapeHtml(g.tourManager.phone)+'</a>' : "")+
+        (g.tourManager.email ? ' · <a href="mailto:'+escapeHtml(g.tourManager.email)+'">'+escapeHtml(g.tourManager.email)+'</a>' : "")+
+      "<br>Präsident: "+escapeHtml(g.president.name||"–")+
+        (g.president.phone ? ' · <a href="tel:'+escapeHtml(g.president.phone)+'">'+escapeHtml(g.president.phone)+'</a>' : "")+
+        (g.president.email ? ' · <a href="mailto:'+escapeHtml(g.president.email)+'">'+escapeHtml(g.president.email)+'</a>' : "")+
+    "</div>";
+  }).join("");
+}
+
+function copyContacts(){
+  const lines = state.groups.map(g =>
+    g.name+" ("+(g.type==="Stamm"?"Stamm":"Gast")+")\n"+
+    "  Tourmanager: "+(g.tourManager.name||"–")+" | "+(g.tourManager.phone||"–")+" | "+(g.tourManager.email||"–")+"\n"+
+    "  Präsident: "+(g.president.name||"–")+" | "+(g.president.phone||"–")+" | "+(g.president.email||"–")
+  );
+  const text = lines.join("\n\n");
+  navigator.clipboard.writeText(text).then(()=>{
+    alert("Kontaktliste wurde in die Zwischenablage kopiert.");
+  }).catch(()=>{
+    alert("Kopieren nicht möglich. Bitte Berechtigung im Browser prüfen.");
+  });
+}
+
+/* ======================================================================
+   EINSTELLUNGEN
+   ====================================================================== */
+
+function renderSettingsModal(){
+  document.getElementById("setEventName").value = state.eventName;
+  document.getElementById("setEventDate").value = state.eventDate;
+  document.getElementById("setBuffer").value = state.minBuffer;
+
+  const container = document.getElementById("settingsLocations");
+  container.innerHTML = "";
+  state.locations.forEach((loc, idx) => {
+    const row = document.createElement("div");
+    row.className = "settings-loc-row";
+    row.innerHTML =
+      '<input type="text" class="loc-name" data-loc-idx="'+idx+'" data-loc-field="name" value="'+escapeHtml(loc.name)+'">'+
+      '<input type="text" class="loc-slots" data-loc-idx="'+idx+'" data-loc-field="slots" value="'+loc.slots.join(", ")+'">'+
+      '<button class="btn btn-danger btn-small" data-loc-remove="'+idx+'">Entfernen</button>';
+    container.appendChild(row);
+  });
+
+  container.querySelectorAll("[data-loc-field]").forEach(inp => {
+    inp.addEventListener("change", () => {
+      const idx = parseInt(inp.getAttribute("data-loc-idx"),10);
+      const field = inp.getAttribute("data-loc-field");
+      if(field==="name"){
+        state.locations[idx].name = inp.value.trim();
+      } else {
+        state.locations[idx].slots = inp.value.split(",")
+          .map(s=>s.trim()).filter(Boolean)
+          .sort((a,b)=>parseTimeToMinutes(a)-parseTimeToMinutes(b));
+      }
+      saveState();
+      renderAll();
+    });
+  });
+  container.querySelectorAll("[data-loc-remove]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const idx = parseInt(btn.getAttribute("data-loc-remove"),10);
+      if(!confirm("Standort \""+state.locations[idx].name+"\" wirklich entfernen?")) return;
+      state.locations.splice(idx,1);
+      saveState();
+      renderSettingsModal();
+      renderAll();
+    });
+  });
+}
+
+function addLocation(){
+  state.locations.push({id: uid("loc"), name:"Neuer Standort", slots:[]});
+  saveState();
+  renderSettingsModal();
+  renderAll();
+}
+
+function exportData(){
+  const blob = new Blob([JSON.stringify(state, null, 2)], {type:"application/json"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  const datePart = state.eventDate || "export";
+  a.download = "fasnacht-hofdere_"+datePart+".json";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function importData(file){
+  const reader = new FileReader();
+  reader.onload = () => {
+    try{
+      const parsed = JSON.parse(reader.result);
+      if(!confirm("Import überschreibt alle aktuellen Daten. Fortfahren?")) return;
+      const def = createDefaultState();
+      state = Object.assign(def, parsed);
+      if(!state.locations || !state.locations.length) state.locations = def.locations;
+      if(!state.battles || state.battles.length!==9) state.battles = def.battles;
+      if(!state.groups) state.groups = [];
+      if(!state.plan) state.plan = {};
+      if(!state.umzug) state.umzug = [];
+      saveState();
+      renderAll();
+      renderSettingsModal();
+      alert("Daten erfolgreich importiert.");
+    }catch(e){
+      alert("Datei konnte nicht gelesen werden: ungültiges JSON.");
+    }
+  };
+  reader.readAsText(file);
+}
+
+function deleteAllData(){
+  if(!confirm("Wirklich ALLE Daten löschen? Dieser Schritt kann nicht rückgängig gemacht werden.")) return;
+  if(!confirm("Letzte Bestätigung: Alle Gruppen, Pläne und Einstellungen werden entfernt.")) return;
+  localStorage.removeItem(STORAGE_KEY);
+  state = createDefaultState();
+  saveState();
+  renderAll();
+  renderSettingsModal();
+}
+
+/* ======================================================================
+   MODALS – GENERISCH
+   ====================================================================== */
+
+function closeModal(id){
+  document.getElementById(id).classList.remove("active");
+}
+
+document.querySelectorAll("[data-close]").forEach(btn => {
+  btn.addEventListener("click", () => closeModal(btn.getAttribute("data-close")));
+});
+document.querySelectorAll(".modal-overlay").forEach(overlay => {
+  overlay.addEventListener("click", (e) => { if(e.target===overlay) overlay.classList.remove("active"); });
+});
+
+/* ======================================================================
+   HEADER / TITEL
+   ====================================================================== */
+
+function renderHeader(){
+  document.getElementById("eventTitle").textContent = state.eventName || "Fasnacht Hofdere";
+  document.getElementById("eventSubtitle").textContent =
+    "Guggenmusik Veranstaltungsplanung" + (state.eventDate ? " · " + formatDateDisplay(state.eventDate) : "");
+}
+
+function formatDateDisplay(iso){
+  const parts = iso.split("-");
+  if(parts.length!==3) return iso;
+  return parts[2]+"."+parts[1]+"."+parts[0];
+}
+
+/* ======================================================================
+   RENDER ALL / INIT
+   ====================================================================== */
+
+function renderAll(){
+  renderHeader();
+  renderGroups();
+  renderPlanung();
+  renderBattle();
+  renderUmzug();
+  renderLogistik();
+}
+
+function initTabs(){
+  document.querySelectorAll(".tab-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll(".tab-btn").forEach(b=>b.classList.remove("active"));
+      document.querySelectorAll(".tab-content").forEach(c=>c.classList.remove("active"));
+      btn.classList.add("active");
+      document.getElementById(btn.getAttribute("data-tab")).classList.add("active");
+    });
+  });
+}
+
+function initEvents(){
+  document.getElementById("btnAddGroup").addEventListener("click", () => openGroupModal(null));
+  document.getElementById("btnSaveGroup").addEventListener("click", saveGroupFromModal);
+
+  document.getElementById("btnGeneratePlan").addEventListener("click", generatePlan);
+  document.getElementById("btnSavePlan").addEventListener("click", () => { saveState(); alert("Plan gespeichert."); });
+  document.getElementById("btnResetPlan").addEventListener("click", resetPlan);
+  document.getElementById("btnPrintPlan").addEventListener("click", () => window.print());
+
+  document.getElementById("btnCopyContacts").addEventListener("click", copyContacts);
+
+  document.getElementById("btnSettings").addEventListener("click", () => {
+    renderSettingsModal();
+    document.getElementById("settingsModalOverlay").classList.add("active");
+  });
+  document.getElementById("setEventName").addEventListener("input", (e) => { state.eventName = e.target.value; saveState(); renderHeader(); });
+  document.getElementById("setEventDate").addEventListener("change", (e) => { state.eventDate = e.target.value; saveState(); renderHeader(); });
+  document.getElementById("setBuffer").addEventListener("change", (e) => { state.minBuffer = parseInt(e.target.value,10)||0; saveState(); renderPlanung(); });
+  document.getElementById("btnAddLocation").addEventListener("click", addLocation);
+  document.getElementById("btnExportData").addEventListener("click", exportData);
+  document.getElementById("importFile").addEventListener("change", (e) => {
+    if(e.target.files && e.target.files[0]) importData(e.target.files[0]);
+    e.target.value = "";
+  });
+  document.getElementById("btnDeleteAll").addEventListener("click", deleteAllData);
+}
+
+loadState();
+initTabs();
+initEvents();
+renderAll();
+
+</script>
+</body>
+</html>
