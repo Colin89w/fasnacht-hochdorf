@@ -797,6 +797,9 @@ function battleSlotLabel(idx){
    Gruppengrösse, gleichmässige Auslastung der Standorte, sowie – sofern
    vorhanden – Ort/Zeit-Wünsche der Gruppe (g.wishes) als stärkstes weiches
    Kriterium; jeder Wunsch wird höchstens einem Auftritt zugerechnet).
+   Pro Gruppe wird an jedem Standort höchstens ein Auftritt eingeplant (der
+   Plan speichert je Gruppe+Standort nur eine Zeit) – trägt eine Gruppe für
+   denselben Standort mehrere Wunschzeiten ein, wird davon nur eine genutzt.
 
    Vereinfachung: Ein Auftritt wird als Zeitpunkt-Ereignis behandelt
    (keine explizite Dauer je Standort-Slot). Der Mindestpuffer wird daher
@@ -879,6 +882,7 @@ function generatePlan(){
     for(let attempt = 0; attempt < remaining; attempt++){
       let candidates = [];
       state.locations.forEach(loc => {
+        if(newPlan[g.id][loc.id]) return; // Gruppe hat an diesem Standort in diesem Lauf bereits einen Auftritt (Plan erlaubt nur 1 Zeit pro Gruppe+Standort)
         const cat = locSizeCategory(loc);
         const used = Object.keys(locUsage[loc.id]).length;
         const total = loc.slots.length || 1;
