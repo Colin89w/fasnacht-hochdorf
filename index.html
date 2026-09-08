@@ -263,6 +263,7 @@ td.conflict .warn-icon{color:var(--danger);margin-right:4px;cursor:help;}
 
 .plan-table th, .plan-table td{white-space:nowrap;}
 .plan-table td.group-name-cell{font-weight:600;}
+.plan-table td.wishes-cell{white-space:normal;max-width:220px;font-size:12px;color:#444;}
 
 .footer-note{margin-top:10px;font-size:13px;color:#555;}
 
@@ -382,6 +383,7 @@ td.conflict .warn-icon{color:var(--danger);margin-right:4px;cursor:help;}
       <button class="btn btn-secondary" id="btnSavePlan">💾 Speichern</button>
       <button class="btn btn-secondary" id="btnResetPlan">↺ Zurücksetzen</button>
       <button class="btn btn-secondary" id="btnPrintPlan">🖨 Drucken</button>
+      <button class="btn btn-secondary" id="btnExportExcel">⬇ Excel exportieren</button>
     </div>
     <div id="planWrapper"></div>
     <div class="footer-note" id="planFooter"></div>
@@ -570,6 +572,7 @@ td.conflict .warn-icon{color:var(--danger);margin-right:4px;cursor:help;}
 
 </div><!-- /#appRoot -->
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js";
 import {
@@ -1067,6 +1070,12 @@ function wishesSummary(g){
   return (g.wishes||[]).map(formatWishLine).join(" | ");
 }
 
+function wishesListHtml(g){
+  const list = g.wishes || [];
+  if(!list.length) return "–";
+  return list.map(w => escapeHtml(formatWishLine(w))).join("<br>");
+}
+
 function renderGroups(){
   const tbody = document.getElementById("groupsTbody");
   tbody.innerHTML = "";
@@ -1264,14 +1273,14 @@ function renderPlanung(){
 
   const conflicts = computeConflicts();
 
-  let html = '<table class="plan-table"><thead><tr><th>Gruppe</th>';
+  let html = '<table class="plan-table"><thead><tr><th>Gruppe</th><th>Wünsche</th>';
   state.locations.forEach(loc => html += "<th>"+escapeHtml(loc.name)+"</th>");
   html += "<th>Battle</th><th>Auftritte</th></tr></thead><tbody>";
 
   state.groups.forEach(g => {
     html += '<tr class="'+(g.type==="Stamm"?"row-stamm":"row-gast")+'">';
-    const hasWishes = g.wishes && g.wishes.length;
-    html += '<td class="group-name-cell"'+(hasWishes?' title="Wünsche: '+escapeHtml(wishesSummary(g))+'"':"")+'>'+escapeHtml(g.name)+(hasWishes?" 📍":"")+"</td>";
+    html += '<td class="group-name-cell">'+escapeHtml(g.name)+"</td>";
+    html += '<td class="wishes-cell">'+wishesListHtml(g)+"</td>";
 
     state.locations.forEach(loc => {
       const key = g.id+"|"+loc.id;
@@ -1372,6 +1381,46 @@ function resetPlan(){
   state.groups.forEach(g => state.plan[g.id] = {});
   saveState();
   renderPlanung();
+}
+
+function exportPlanExcel(){
+  if(typeof XLSX === "undefined"){
+    alert("Excel-Bibliothek konnte nicht geladen werden. Bitte Internetverbindung prüfen und Seite neu laden.");
+    return;
+  }
+  const header = ["Gruppe", "Typ", "Wünsche"];
+  state.locations.forEach(loc => header.push(loc.name));
+  header.push("Battle", "Auftritte (Ist/Soll)");
+
+  const rows = [header];
+  state.groups.forEach(g => {
+    const row = [g.name, g.type, wishesSummary(g)];
+    state.locations.forEach(loc => {
+      row.push((state.plan[g.id] && state.plan[g.id][loc.id]) || "");
+    });
+    const battleEntries = [];
+    state.battles.forEach((b, idx) => {
+      if(b.group1Id===g.id || b.group2Id===g.id) battleEntries.push("Slot "+(idx+1)+" ("+battleSlotLabel(idx)+")");
+    });
+    row.push(battleEntries.join(", "));
+
+    const assignedCount = countGroupAssignments(g.id);
+    const target = g.desiredCount||0;
+    let statusLabel;
+    if(g.desiredMode === "any") statusLabel = assignedCount + " (egal)";
+    else if(target===0) statusLabel = assignedCount + " (0 gewünscht)";
+    else statusLabel = assignedCount + " / " + target;
+    row.push(statusLabel);
+
+    rows.push(row);
+  });
+
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  ws["!cols"] = header.map((h,i) => ({wch: Math.max(12, Math.min(30, h.length+4))}));
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Auftritte-Planung");
+  const datePart = state.eventDate || "plan";
+  XLSX.writeFile(wb, "fasnacht-hofdere_auftritte-planung_"+datePart+".xlsx");
 }
 
 /* ======================================================================
@@ -1728,6 +1777,7 @@ function initEvents(){
   document.getElementById("btnSavePlan").addEventListener("click", () => { saveState(); alert("Plan gespeichert."); });
   document.getElementById("btnResetPlan").addEventListener("click", resetPlan);
   document.getElementById("btnPrintPlan").addEventListener("click", () => window.print());
+  document.getElementById("btnExportExcel").addEventListener("click", exportPlanExcel);
 
   document.getElementById("btnCopyContacts").addEventListener("click", copyContacts);
 
