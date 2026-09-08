@@ -392,6 +392,10 @@ td.conflict .warn-icon{color:var(--danger);margin-right:4px;cursor:help;}
   <!-- TAB 3: BATTLE -->
   <section id="tab-battle" class="tab-content">
     <h2>Battle-Plan</h2>
+    <div class="toolbar">
+      <button class="btn btn-gold" id="btnGenerateBattle">🎲 Battle generieren (nach Umzug-Reihenfolge)</button>
+    </div>
+    <p class="hint">Nimmt die aktuelle Reihenfolge aus Tab „Umzug" (nur mitlaufende Gruppen) und bildet Paarungen: Position 1 gegen 2, 3 gegen 4, usw. Der Sonderauftritt (oberste Zeile) bleibt dabei unverändert.</p>
     <div id="battleWarning"></div>
     <table id="battleTable">
       <thead>
@@ -1590,6 +1594,43 @@ function renderBattle(){
   });
 }
 
+function generateBattleFromUmzug(){
+  syncUmzugWithGroups();
+  const orderedGroupIds = state.umzug.filter(u => u.included && getGroup(u.groupId)).map(u => u.groupId);
+
+  if(orderedGroupIds.length < 2){
+    alert("Zu wenig mitlaufende Gruppen im Umzug für ein Battle (mind. 2 nötig).");
+    return;
+  }
+  if(!confirm("Battle-Plan (Slot 1–8) anhand der aktuellen Umzug-Reihenfolge neu generieren? Bestehende Zuteilungen in diesen Slots werden überschrieben. Der Sonderauftritt (oberste Zeile) bleibt unverändert.")) return;
+
+  const maxSlots = state.battles.length - 1; // Slot 0 = Sonderauftritt, bleibt unangetastet
+  const maxGroups = maxSlots * 2;
+  const usable = orderedGroupIds.slice(0, maxGroups);
+  const overflowCount = orderedGroupIds.length - usable.length;
+
+  for(let slot = 1; slot < state.battles.length; slot++){
+    const pairIdx = (slot - 1) * 2;
+    state.battles[slot].group1Id = usable[pairIdx] || "";
+    state.battles[slot].group2Id = usable[pairIdx+1] || "";
+  }
+
+  saveState();
+  renderBattle();
+  renderPlanung();
+
+  const pairCount = Math.floor(usable.length / 2);
+  let msg = "Battle-Plan generiert: "+pairCount+" Paarung"+(pairCount===1?"":"en")+" aus "+orderedGroupIds.length+" mitlaufenden Gruppen.";
+  if(usable.length % 2 === 1){
+    const lastGroup = getGroup(usable[usable.length-1]);
+    msg += "\n\nHinweis: Position "+usable.length+" ("+(lastGroup?lastGroup.name:"?")+") hat wegen ungerader Anzahl keinen Gegner und steht allein in Slot "+Math.ceil(usable.length/2)+".";
+  }
+  if(overflowCount > 0){
+    msg += "\n\nHinweis: "+overflowCount+" Gruppe(n) am Ende der Umzug-Reihenfolge hatten keinen freien Battle-Slot mehr (nur "+maxSlots+" Slots à 2 Gruppen verfügbar) und wurden nicht zugeteilt.";
+  }
+  alert(msg);
+}
+
 /* ======================================================================
    TAB 4: UMZUG
    ====================================================================== */
@@ -1868,6 +1909,8 @@ function initEvents(){
   document.getElementById("btnResetPlan").addEventListener("click", resetPlan);
   document.getElementById("btnPrintPlan").addEventListener("click", () => window.print());
   document.getElementById("btnExportExcel").addEventListener("click", exportAllExcel);
+
+  document.getElementById("btnGenerateBattle").addEventListener("click", generateBattleFromUmzug);
 
   document.getElementById("btnCopyContacts").addEventListener("click", copyContacts);
 
