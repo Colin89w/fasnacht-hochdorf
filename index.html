@@ -341,6 +341,7 @@ td.conflict .warn-icon{color:var(--danger);margin-right:4px;cursor:help;}
     <div class="sub" id="eventSubtitle">Guggenmusik Veranstaltungsplanung</div>
   </div>
   <div style="display:flex;gap:10px;align-items:center;">
+    <button class="icon-btn" id="btnExportExcel" title="Alles als Excel exportieren">⬇</button>
     <button class="icon-btn" id="btnLogout" title="Abmelden">⎋</button>
     <button class="icon-btn" id="btnSettings" title="Einstellungen">⚙</button>
   </div>
@@ -383,7 +384,6 @@ td.conflict .warn-icon{color:var(--danger);margin-right:4px;cursor:help;}
       <button class="btn btn-secondary" id="btnSavePlan">💾 Speichern</button>
       <button class="btn btn-secondary" id="btnResetPlan">↺ Zurücksetzen</button>
       <button class="btn btn-secondary" id="btnPrintPlan">🖨 Drucken</button>
-      <button class="btn btn-secondary" id="btnExportExcel">⬇ Excel exportieren</button>
     </div>
     <div id="planWrapper"></div>
     <div class="footer-note" id="planFooter"></div>
@@ -1383,11 +1383,39 @@ function resetPlan(){
   renderPlanung();
 }
 
-function exportPlanExcel(){
-  if(typeof XLSX === "undefined"){
-    alert("Excel-Bibliothek konnte nicht geladen werden. Bitte Internetverbindung prüfen und Seite neu laden.");
-    return;
+function addExcelSheet(wb, sheetName, rows){
+  const header = rows[0] || [];
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  ws["!cols"] = header.map(h => ({wch: Math.max(12, Math.min(30, String(h).length+4))}));
+  if(rows.length > 1){
+    ws["!autofilter"] = { ref: XLSX.utils.encode_range({s:{r:0,c:0}, e:{r:rows.length-1, c:header.length-1}}) };
   }
+  XLSX.utils.book_append_sheet(wb, ws, sheetName.slice(0,31)); // Excel-Limit: 31 Zeichen pro Blattname
+}
+
+function buildGruppenRows(){
+  const header = ["Name","Typ","Anreise","Abreise","Ø Auftritte","Wünsche","Mitglieder","Parkplatz","Anhänger","Znachtessen","Tourmanager","Präsident"];
+  const rows = [header];
+  state.groups.forEach(g => {
+    rows.push([
+      g.name,
+      g.type,
+      g.arrival || "",
+      g.departure || "",
+      g.desiredMode === "any" ? "egal" : g.desiredCount,
+      wishesSummary(g),
+      g.memberCount,
+      g.carPark ? "Ja" : "Nein",
+      g.trailer ? "Ja" : "Nein",
+      g.dinner ? "Ja" : "Nein",
+      g.tourManager.name || "",
+      g.president.name || ""
+    ]);
+  });
+  return rows;
+}
+
+function buildPlanungRows(){
   const header = ["Gruppe", "Typ", "Wünsche"];
   state.locations.forEach(loc => header.push(loc.name));
   header.push("Battle", "Auftritte (Ist/Soll)");
@@ -1414,13 +1442,75 @@ function exportPlanExcel(){
 
     rows.push(row);
   });
+  return rows;
+}
 
-  const ws = XLSX.utils.aoa_to_sheet(rows);
-  ws["!cols"] = header.map((h,i) => ({wch: Math.max(12, Math.min(30, h.length+4))}));
+function buildBattleRows(){
+  const header = ["Slot", "Zeit", "Gruppe 1", "Gruppe 2"];
+  const rows = [header];
+  state.battles.forEach((b, idx) => {
+    const isSpecial = idx === 0;
+    let g1, g2;
+    if(isSpecial){
+      g1 = b.mode === "freitext" ? b.freeText : (getGroup(b.group1Id)?.name || "");
+      g2 = "";
+    } else {
+      g1 = getGroup(b.group1Id)?.name || "";
+      g2 = getGroup(b.group2Id)?.name || "";
+    }
+    rows.push([isSpecial ? "Sonderauftritt" : "Slot "+idx, battleSlotLabel(idx), g1, g2]);
+  });
+  return rows;
+}
+
+function buildUmzugRows(){
+  const header = ["Nr.", "Gruppe", "Mitglieder", "Dabei"];
+  const rows = [header];
+  let num = 0;
+  state.umzug.forEach(entry => {
+    const g = getGroup(entry.groupId);
+    if(!g) return;
+    if(entry.included) num++;
+    rows.push([entry.included ? num : "", g.name, g.memberCount, entry.included ? "Ja" : "Nein"]);
+  });
+  return rows;
+}
+
+function buildLogistikRows(){
+  const header = ["Gruppe","Mitglieder","Parkplatz","Anhänger","Znachtessen","Tourmanager Name","Tourmanager Telefon","Tourmanager Mail","Präsident Name","Präsident Telefon","Präsident Mail"];
+  const rows = [header];
+  state.groups.forEach(g => {
+    rows.push([
+      g.name,
+      g.memberCount,
+      g.carPark ? "Ja" : "Nein",
+      g.trailer ? "Ja" : "Nein",
+      g.dinner ? "Ja" : "Nein",
+      g.tourManager.name || "",
+      g.tourManager.phone || "",
+      g.tourManager.email || "",
+      g.president.name || "",
+      g.president.phone || "",
+      g.president.email || ""
+    ]);
+  });
+  return rows;
+}
+
+function exportAllExcel(){
+  if(typeof XLSX === "undefined"){
+    alert("Excel-Bibliothek konnte nicht geladen werden. Bitte Internetverbindung prüfen und Seite neu laden.");
+    return;
+  }
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, "Auftritte-Planung");
-  const datePart = state.eventDate || "plan";
-  XLSX.writeFile(wb, "fasnacht-hofdere_auftritte-planung_"+datePart+".xlsx");
+  addExcelSheet(wb, "Gruppen", buildGruppenRows());
+  addExcelSheet(wb, "Auftritte-Planung", buildPlanungRows());
+  addExcelSheet(wb, "Battle-Plan", buildBattleRows());
+  addExcelSheet(wb, "Umzug", buildUmzugRows());
+  addExcelSheet(wb, "Logistik & Kontakte", buildLogistikRows());
+
+  const datePart = state.eventDate || "export";
+  XLSX.writeFile(wb, "fasnacht-hofdere_"+datePart+".xlsx");
 }
 
 /* ======================================================================
@@ -1777,7 +1867,7 @@ function initEvents(){
   document.getElementById("btnSavePlan").addEventListener("click", () => { saveState(); alert("Plan gespeichert."); });
   document.getElementById("btnResetPlan").addEventListener("click", resetPlan);
   document.getElementById("btnPrintPlan").addEventListener("click", () => window.print());
-  document.getElementById("btnExportExcel").addEventListener("click", exportPlanExcel);
+  document.getElementById("btnExportExcel").addEventListener("click", exportAllExcel);
 
   document.getElementById("btnCopyContacts").addEventListener("click", copyContacts);
 
