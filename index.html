@@ -462,8 +462,11 @@ td.conflict .warn-icon{color:var(--danger);margin-right:4px;cursor:help;}
           <input type="time" id="gDeparture">
         </div>
         <div class="form-field">
-          <label>Gewünschte Auftritte (0 = egal)</label>
+          <label>Gewünschte Auftritte</label>
           <input type="number" id="gDesired" min="0" value="0">
+        </div>
+        <div class="form-field checkbox">
+          <input type="checkbox" id="gDesiredAny"><label>Anzahl egal (Algorithmus plant frei)</label>
         </div>
         <div class="form-field checkbox">
           <input type="checkbox" id="gCarPark"><label>Carparkplatz benötigt</label>
@@ -644,7 +647,13 @@ function normalizeState(parsed){
   if(!s.groups) s.groups = [];
   if(!s.plan) s.plan = {};
   if(!s.umzug) s.umzug = [];
-  s.groups.forEach(g => { if(!Array.isArray(g.wishes)) g.wishes = []; });
+  s.groups.forEach(g => {
+    if(!Array.isArray(g.wishes)) g.wishes = [];
+    if(g.desiredMode !== "any" && g.desiredMode !== "fixed"){
+      // Migration: alte Daten benutzten desiredCount===0 als "egal".
+      g.desiredMode = (g.desiredCount||0) > 0 ? "fixed" : "any";
+    }
+  });
   return s;
 }
 
@@ -853,8 +862,9 @@ function generatePlan(){
 
   // 4) Greedy-Zuteilung.
   sortedGroups.forEach(g => {
+    if(g.desiredMode === "any") return; // "egal" -> Algorithmus erzwingt keine feste Anzahl
     const target = g.desiredCount || 0;
-    if(target <= 0) return; // "egal" -> Algorithmus erzwingt keine feste Anzahl
+    if(target <= 0) return; // 0 Auftritte gewünscht -> Gruppe bewusst nicht einteilen
 
     // Battle-Auftritte zählen bereits als erfüllter Teil des Wunsches, damit
     // eine Gruppe mit Battle-Slot nicht mehr Auftritte bekommt als gewünscht.
@@ -937,7 +947,7 @@ function generatePlan(){
     });
   });
 
-  const groupsWithWish = state.groups.filter(g => (g.desiredCount||0) > 0);
+  const groupsWithWish = state.groups.filter(g => g.desiredMode === "fixed");
   const fullyMetCount = groupsWithWish.filter(g => countGroupAssignments(g.id) >= g.desiredCount).length;
 
   showSummaryModal({
@@ -1068,7 +1078,7 @@ function renderGroups(){
       "<td>"+(g.type==="Stamm" ? '<span class="tag-stamm">Stamm</span>' : '<span class="tag-gast">Gast</span>')+"</td>"+
       "<td>"+(g.arrival||"–")+"</td>"+
       "<td>"+(g.departure||"–")+"</td>"+
-      "<td>"+(g.desiredCount>0 ? g.desiredCount : "egal")+"</td>"+
+      "<td>"+(g.desiredMode==="any" ? "egal" : g.desiredCount)+"</td>"+
       "<td>"+wishCell+"</td>"+
       "<td>"+g.memberCount+"</td>"+
       "<td>"+(g.carPark?"✓":"–")+"</td>"+
@@ -1093,14 +1103,14 @@ function renderGroups(){
   const totalMembers = state.groups.reduce((s,g)=>s+(g.memberCount||0),0);
   const totalPark = state.groups.filter(g=>g.carPark).length;
   const totalTrailer = state.groups.filter(g=>g.trailer).length;
-  const totalDinner = state.groups.filter(g=>g.dinner).length;
+  const totalDinnerPersons = state.groups.filter(g=>g.dinner).reduce((s,g)=>s+(g.memberCount||0),0);
 
   document.getElementById("groupsSummary").innerHTML = [
     ["Gruppen total", state.groups.length],
     ["Mitglieder total", totalMembers],
     ["Carparkplätze", totalPark],
     ["Anhänger", totalTrailer],
-    ["Znachtessen", totalDinner]
+    ["Znachtessen (Personen)", totalDinnerPersons]
   ].map(([lbl,num]) => '<div class="stat-card"><div class="num">'+num+'</div><div class="lbl">'+lbl+'</div></div>').join("");
 }
 
@@ -1145,6 +1155,12 @@ function renderWishRows(){
   });
 }
 
+function updateDesiredFieldState(){
+  const any = document.getElementById("gDesiredAny").checked;
+  const input = document.getElementById("gDesired");
+  input.disabled = any;
+}
+
 function openGroupModal(id){
   const modal = document.getElementById("groupModalOverlay");
   const g = id ? getGroup(id) : null;
@@ -1156,6 +1172,8 @@ function openGroupModal(id){
   document.getElementById("gArrival").value = g ? g.arrival : "";
   document.getElementById("gDeparture").value = g ? g.departure : "";
   document.getElementById("gDesired").value = g ? g.desiredCount : 0;
+  document.getElementById("gDesiredAny").checked = g ? g.desiredMode === "any" : true;
+  updateDesiredFieldState();
   document.getElementById("gCarPark").checked = g ? g.carPark : false;
   document.getElementById("gTrailer").checked = g ? g.trailer : false;
   document.getElementById("gDinner").checked = g ? g.dinner : false;
@@ -1182,6 +1200,7 @@ function saveGroupFromModal(){
     memberCount: parseInt(document.getElementById("gMembers").value,10) || 0,
     arrival: document.getElementById("gArrival").value,
     departure: document.getElementById("gDeparture").value,
+    desiredMode: document.getElementById("gDesiredAny").checked ? "any" : "fixed",
     desiredCount: parseInt(document.getElementById("gDesired").value,10) || 0,
     carPark: document.getElementById("gCarPark").checked,
     trailer: document.getElementById("gTrailer").checked,
@@ -1276,8 +1295,12 @@ function renderPlanung(){
     const assignedCount = countGroupAssignments(g.id);
     const target = g.desiredCount||0;
     let badge;
-    if(target===0){
-      badge = '<span class="badge badge-neutral">'+assignedCount+' Auftritte (kein Wunsch)</span>';
+    if(g.desiredMode==="any"){
+      badge = '<span class="badge badge-neutral">'+assignedCount+' Auftritte (egal)</span>';
+    } else if(target===0){
+      badge = assignedCount===0
+        ? '<span class="badge badge-green">0 Auftritte (wie gewünscht)</span>'
+        : '<span class="badge badge-orange">'+assignedCount+' Auftritte (0 gewünscht!)</span>';
     } else if(assignedCount >= target){
       badge = '<span class="badge badge-green">'+assignedCount+' von '+target+' erfüllt</span>';
     } else {
@@ -1505,9 +1528,9 @@ function renderLogistik(){
   const totalMembers = state.groups.reduce((s,g)=>s+(g.memberCount||0),0);
   const totalPark = state.groups.filter(g=>g.carPark).length;
   const totalTrailer = state.groups.filter(g=>g.trailer).length;
-  const totalDinner = state.groups.filter(g=>g.dinner).length;
+  const totalDinnerPersons = state.groups.filter(g=>g.dinner).reduce((s,g)=>s+(g.memberCount||0),0);
   document.getElementById("logisticsTfoot").innerHTML =
-    "<tr><th>Total</th><th>"+totalMembers+"</th><th>"+totalPark+"</th><th>"+totalTrailer+"</th><th>"+totalDinner+"</th></tr>";
+    "<tr><th>Total</th><th>"+totalMembers+"</th><th>"+totalPark+"</th><th>"+totalTrailer+"</th><th>"+totalDinnerPersons+" Pers.</th></tr>";
 
   const contactList = document.getElementById("contactList");
   contactList.innerHTML = state.groups.map(g => {
@@ -1695,6 +1718,7 @@ function initEvents(){
     renderWishRows();
   });
   document.getElementById("btnSaveGroup").addEventListener("click", saveGroupFromModal);
+  document.getElementById("gDesiredAny").addEventListener("change", updateDesiredFieldState);
 
   document.getElementById("btnGeneratePlan").addEventListener("click", generatePlan);
   document.getElementById("btnSavePlan").addEventListener("click", () => { saveState(); alert("Plan gespeichert."); });
