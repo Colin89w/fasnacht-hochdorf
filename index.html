@@ -796,8 +796,10 @@ function battleSlotLabel(idx){
    GROBPLAN-ALGORITHMUS (generatePlan)
    ------------------------------------------------------------------
    Erzeugt automatisch eine Zuteilung von Gruppen auf Standort-Zeitslots.
-   Battle-Slots (Tab 3) werden als bereits fixierte Auftritte behandelt und
-   blockieren die betroffenen Gruppen. Der Rest wird per Greedy-Verfahren
+   Battle-Slots (Tab 3) blockieren die betroffenen Gruppen zeitlich (Puffer-
+   konflikte werden vermieden), zählen aber NICHT zu den gewünschten
+   Auftritten – Battle ist ein separater Programmpunkt. Der Rest wird per
+   Greedy-Verfahren
    zugeteilt: Stammmitglieder zuerst, danach nach Anzahl gewünschter
    Auftritte absteigend sortiert. Für jede Gruppe werden nacheinander die
    bestbewerteten freien Slots vergeben (Standortgrösse passend zur
@@ -876,10 +878,10 @@ function generatePlan(){
     const target = g.desiredCount || 0;
     if(target <= 0) return; // 0 Auftritte gewünscht -> Gruppe bewusst nicht einteilen
 
-    // Battle-Auftritte zählen bereits als erfüllter Teil des Wunsches, damit
-    // eine Gruppe mit Battle-Slot nicht mehr Auftritte bekommt als gewünscht.
-    const battleCount = blocked[g.id].length;
-    const remaining = Math.max(0, target - battleCount);
+    // Battle-Auftritte zählen NICHT zu den gewünschten Auftritten dazu (Battle
+    // ist ein separater Programmpunkt); blocked[g.id] dient hier nur dazu,
+    // Zeitkonflikte mit dem Battle-Slot zu vermeiden (Mindestpuffer).
+    const remaining = target;
 
     const wantedCategory = groupSizeCategory(g);
     let assigned = 0;
@@ -934,7 +936,7 @@ function generatePlan(){
       assigned++;
     }
 
-    const totalAssigned = assigned + battleCount;
+    const totalAssigned = assigned;
     if(totalAssigned < target){
       unmet.push({
         group:g,
@@ -942,7 +944,7 @@ function generatePlan(){
         target,
         reason: totalAssigned === 0
           ? "Keine freien, passenden Slots im Zeitfenster " + (g.arrival||"?") + "–" + (g.departure||"?") + " gefunden."
-          : "Nur " + totalAssigned + " von " + target + " Wunsch-Auftritten (inkl. Battle) hatten im Zeitfenster " + (g.arrival||"?") + "–" + (g.departure||"?") + " noch freie, konfliktfreie Slots."
+          : "Nur " + totalAssigned + " von " + target + " Wunsch-Auftritten hatten im Zeitfenster " + (g.arrival||"?") + "–" + (g.departure||"?") + " noch freie, konfliktfreie Slots."
       });
     }
   });
@@ -973,12 +975,12 @@ function generatePlan(){
 }
 
 function countGroupAssignments(groupId){
+  // Zählt nur Standort-Auftritte aus dem Plan. Battle-Auftritte sind ein
+  // separater Programmpunkt und zählen bewusst nicht zu den gewünschten
+  // Auftritten dazu.
   let count = 0;
   const assignments = state.plan[groupId] || {};
   Object.values(assignments).forEach(v => { if(v) count++; });
-  state.battles.forEach(b => {
-    if(b.group1Id === groupId || b.group2Id === groupId) count++;
-  });
   return count;
 }
 
