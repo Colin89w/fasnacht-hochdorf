@@ -283,7 +283,6 @@ td.conflict .warn-icon{color:var(--danger);margin-right:4px;cursor:help;}
 .umzug-list li.dragging{opacity:.4;}
 .umzug-list li .num{font-weight:700;color:var(--dark-red);width:26px;}
 .umzug-list li .members{color:#777;font-size:12px;margin-left:auto;}
-.umzug-list li.excluded{opacity:.5;}
 
 .contact-list .contact-card{
   background:#fff;border:1px solid var(--border);border-radius:6px;
@@ -409,7 +408,7 @@ td.conflict .warn-icon{color:var(--danger);margin-right:4px;cursor:help;}
   <!-- TAB 4: UMZUG -->
   <section id="tab-umzug" class="tab-content">
     <h2>Umzug</h2>
-    <p class="hint">Reihenfolge per Drag &amp; Drop anpassen. Checkbox abwählen falls Gruppe nicht mitläuft.</p>
+    <p class="hint">Reihenfolge per Drag &amp; Drop anpassen. Checkbox abwählen falls Gruppe nicht mitläuft – sie verschwindet dann aus dieser Liste und ist über „Gruppe bearbeiten" wieder aktivierbar.</p>
     <ul class="umzug-list" id="umzugList"></ul>
   </section>
 
@@ -1702,15 +1701,15 @@ function renderUmzug(){
   state.umzug.forEach((entry, idx) => {
     const g = getGroup(entry.groupId);
     if(!g) return;
-    if(entry.included) num++;
+    if(!entry.included) return; // nicht mitlaufende Gruppen werden hier gar nicht mehr angezeigt (reaktivierbar über Gruppe bearbeiten)
+    num++;
 
     const li = document.createElement("li");
     li.draggable = true;
-    li.className = entry.included ? "" : "excluded";
     li.setAttribute("data-index", idx);
     li.innerHTML =
-      '<span class="num">'+(entry.included ? num : "–")+'</span>'+
-      '<input type="checkbox" data-umzug-check="'+idx+'" '+(entry.included?"checked":"")+'>'+
+      '<span class="num">'+num+'</span>'+
+      '<input type="checkbox" data-umzug-check="'+idx+'" checked>'+
       '<span>'+escapeHtml(g.name)+"</span>"+
       '<span class="members">'+g.memberCount+' Mitglieder</span>';
     list.appendChild(li);
