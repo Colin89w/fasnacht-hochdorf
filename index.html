@@ -483,6 +483,12 @@ td.conflict .warn-icon{color:var(--danger);margin-right:4px;cursor:help;}
         <div class="form-field checkbox">
           <input type="checkbox" id="gDinner"><label>Znachtessen</label>
         </div>
+        <div class="form-field checkbox">
+          <input type="checkbox" id="gBattleParticipate" checked><label>Macht beim Battle mit</label>
+        </div>
+        <div class="form-field checkbox">
+          <input type="checkbox" id="gUmzugParticipate" checked><label>Macht beim Umzug mit</label>
+        </div>
 
         <fieldset>
           <legend>Auftritts-Wünsche (Ort/Zeit)</legend>
@@ -660,6 +666,7 @@ function normalizeState(parsed){
       // Migration: alte Daten benutzten desiredCount===0 als "egal".
       g.desiredMode = (g.desiredCount||0) > 0 ? "fixed" : "any";
     }
+    if(typeof g.battleParticipate !== "boolean") g.battleParticipate = true;
   });
   return s;
 }
@@ -774,6 +781,20 @@ function minutesToLabel(mins){
   let m = ((mins % 1440) + 1440) % 1440;
   const h = Math.floor(m/60), mm = m%60;
   return String(h).padStart(2,"0")+":"+String(mm).padStart(2,"0");
+}
+
+// Index des Slots in loc.slots, dessen Zeit dem Zielzeitpunkt am nächsten liegt.
+// Dient dazu, bei einem nicht verfügbaren Wunsch-Zeitpunkt den "Slot davor/danach"
+// am selben Standort zu erkennen (unabhängig vom exakten Minutenabstand).
+function nearestSlotIndex(loc, targetMin){
+  let bestIdx = -1, bestDiff = Infinity;
+  loc.slots.forEach((t, idx) => {
+    const tm = parseTimeToMinutes(t);
+    if(tm === null) return;
+    const diff = Math.abs(tm - targetMin);
+    if(diff < bestDiff){ bestDiff = diff; bestIdx = idx; }
+  });
+  return bestIdx;
 }
 
 // Fixed battle slot time windows (slot 0 is the 10-minute "Sonderauftritt").
@@ -895,7 +916,7 @@ function generatePlan(){
         const cat = locSizeCategory(loc);
         const used = Object.keys(locUsage[loc.id]).length;
         const total = loc.slots.length || 1;
-        loc.slots.forEach(timeStr => {
+        loc.slots.forEach((timeStr, slotIdx) => {
           if(locUsage[loc.id][timeStr]) return; // Standort+Slot schon belegt (Constraint 3)
           const slotMin = parseTimeToMinutes(timeStr);
           if(slotMin === null) return;
@@ -905,7 +926,9 @@ function generatePlan(){
           else if(cat === "neutral") score += 3;
           score += (1 - used/total) * 5;                  // weicher Constraint 8: Auslastung ausgleichen
 
-          // weicher Constraint 9: Ort/Zeit-Wünsche der Gruppe bevorzugen.
+          // weicher Constraint 9: Ort/Zeit-Wünsche der Gruppe bevorzugen. Ist der
+          // exakte Wunsch-Slot nicht (mehr) verfügbar, wird nach Möglichkeit der
+          // direkt benachbarte Slot (eins davor/danach) am selben Standort bevorzugt.
           let wishBonus = 0, matchedWish = null;
           (g.wishes||[]).forEach(w => {
             if(consumedWishIds.has(w.id)) return;
@@ -913,9 +936,17 @@ function generatePlan(){
             const wTime = w.time ? parseTimeToMinutes(w.time) : null;
             const timeMatch = wTime !== null && Math.abs(slotMin - wTime) <= WISH_TIME_TOLERANCE;
             let b = 0;
-            if(locMatch && timeMatch) b = 25;
-            else if(locMatch) b = 15;
-            else if(timeMatch) b = 8;
+            if(locMatch && wTime !== null){
+              const anchorIdx = nearestSlotIndex(loc, wTime);
+              const idxDiff = anchorIdx === -1 ? Infinity : Math.abs(slotIdx - anchorIdx);
+              if(idxDiff === 0) b = 25;                    // Wunsch-Zeit exakt getroffen
+              else if(idxDiff === 1 || timeMatch) b = 20;   // ein Slot davor/danach bzw. noch in Zeit-Toleranz
+              else b = 15;                                   // Standort passt, Zeit weiter weg
+            } else if(locMatch){
+              b = 15;                                         // Standort passt, kein Zeit-Wunsch angegeben
+            } else if(timeMatch){
+              b = 8;                                           // nur Zeit passt ungefähr, anderer/kein Standort
+            }
             if(b > wishBonus){ wishBonus = b; matchedWish = w; }
           });
           score += wishBonus;
@@ -1196,6 +1227,10 @@ function openGroupModal(id){
   document.getElementById("gCarPark").checked = g ? g.carPark : false;
   document.getElementById("gTrailer").checked = g ? g.trailer : false;
   document.getElementById("gDinner").checked = g ? g.dinner : false;
+  document.getElementById("gBattleParticipate").checked = g ? g.battleParticipate !== false : true;
+  document.getElementById("gUmzugParticipate").checked = g
+    ? (state.umzug.find(u => u.groupId === g.id)?.included !== false)
+    : true;
   document.getElementById("gTmName").value = g ? g.tourManager.name : "";
   document.getElementById("gTmPhone").value = g ? g.tourManager.phone : "";
   document.getElementById("gTmMail").value = g ? g.tourManager.email : "";
@@ -1224,6 +1259,7 @@ function saveGroupFromModal(){
     carPark: document.getElementById("gCarPark").checked,
     trailer: document.getElementById("gTrailer").checked,
     dinner: document.getElementById("gDinner").checked,
+    battleParticipate: document.getElementById("gBattleParticipate").checked,
     tourManager:{
       name: document.getElementById("gTmName").value.trim(),
       phone: document.getElementById("gTmPhone").value.trim(),
@@ -1237,14 +1273,17 @@ function saveGroupFromModal(){
     wishes: editingWishes.map(w => ({id:w.id, locationId:w.locationId||"", time:w.time||"", note:(w.note||"").trim()}))
   };
 
+  const umzugIncluded = document.getElementById("gUmzugParticipate").checked;
   if(id){
     const idx = state.groups.findIndex(g=>g.id===id);
     state.groups[idx] = data;
   } else {
     state.groups.push(data);
-    state.umzug.push({groupId:data.id, included:true});
+    state.umzug.push({groupId:data.id, included:umzugIncluded});
   }
   syncUmzugWithGroups();
+  const umzugEntry = state.umzug.find(u => u.groupId === data.id);
+  if(umzugEntry) umzugEntry.included = umzugIncluded;
   saveState();
   closeModal("groupModalOverlay");
   renderAll();
@@ -1598,10 +1637,17 @@ function renderBattle(){
 
 function generateBattleFromUmzug(){
   syncUmzugWithGroups();
-  const orderedGroupIds = state.umzug.filter(u => u.included && getGroup(u.groupId)).map(u => u.groupId);
+  // Gruppen, die zwar mitlaufen aber laut Häkchen "Macht beim Battle mit" nicht
+  // teilnehmen (z.B. eine Gruppe, die traditionell immer Position 1 ist, aber
+  // nie Battle spielt), werden übersprungen, ohne die Paarung zu verschieben.
+  const orderedGroupIds = state.umzug
+    .filter(u => u.included)
+    .map(u => getGroup(u.groupId))
+    .filter(g => g && g.battleParticipate !== false)
+    .map(g => g.id);
 
   if(orderedGroupIds.length < 2){
-    alert("Zu wenig mitlaufende Gruppen im Umzug für ein Battle (mind. 2 nötig).");
+    alert("Zu wenig battle-teilnehmende, mitlaufende Gruppen im Umzug für ein Battle (mind. 2 nötig).");
     return;
   }
   if(!confirm("Battle-Plan (Slot 1–8) anhand der aktuellen Umzug-Reihenfolge neu generieren? Bestehende Zuteilungen in diesen Slots werden überschrieben. Der Sonderauftritt (oberste Zeile) bleibt unverändert.")) return;
@@ -1622,7 +1668,7 @@ function generateBattleFromUmzug(){
   renderPlanung();
 
   const pairCount = Math.floor(usable.length / 2);
-  let msg = "Battle-Plan generiert: "+pairCount+" Paarung"+(pairCount===1?"":"en")+" aus "+orderedGroupIds.length+" mitlaufenden Gruppen.";
+  let msg = "Battle-Plan generiert: "+pairCount+" Paarung"+(pairCount===1?"":"en")+" aus "+orderedGroupIds.length+" battle-teilnehmenden, mitlaufenden Gruppen.";
   if(usable.length % 2 === 1){
     const lastGroup = getGroup(usable[usable.length-1]);
     msg += "\n\nHinweis: Position "+usable.length+" ("+(lastGroup?lastGroup.name:"?")+") hat wegen ungerader Anzahl keinen Gegner und steht allein in Slot "+Math.ceil(usable.length/2)+".";
