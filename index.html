@@ -281,6 +281,7 @@ td.conflict .warn-icon{color:var(--danger);margin-right:4px;cursor:help;}
   cursor:grab;
 }
 .umzug-list li.dragging{opacity:.4;}
+.umzug-list li.locked{border-left-color:var(--dark-red);background:#fff7f2;}
 .umzug-list li .num{font-weight:700;color:var(--dark-red);width:26px;}
 .umzug-list li .members{color:#777;font-size:12px;margin-left:auto;}
 
@@ -411,7 +412,7 @@ td.conflict .warn-icon{color:var(--danger);margin-right:4px;cursor:help;}
     <div class="toolbar">
       <button class="btn btn-gold" id="btnGenerateUmzug">🎲 Umzug generieren (nach Grösse)</button>
     </div>
-    <p class="hint">Ordnet die mitlaufenden Gruppen nach Mitgliederzahl (ähnlich grosse hintereinander) und hält dabei zwischen zwei Hofdere-Guggen (Stamm) mindestens 3 andere Guggen Abstand ein. Reihenfolge danach per Drag &amp; Drop feinjustierbar. Checkbox abwählen falls Gruppe nicht mitläuft – sie verschwindet dann aus dieser Liste und ist über „Gruppe bearbeiten" wieder aktivierbar.</p>
+    <p class="hint">Ordnet die mitlaufenden Gruppen nach Mitgliederzahl (ähnlich grosse hintereinander) und hält dabei zwischen zwei Hofdere-Guggen (Stamm) mindestens 3 andere Guggen Abstand ein. 📍 an einer Gruppe fixiert ihre Position (z.B. Tambouren immer zuvorderst) – „Umzug generieren" lässt fixierte (📌) Positionen unangetastet und füllt nur den Rest auf. Reihenfolge danach per Drag &amp; Drop feinjustierbar. Checkbox abwählen falls Gruppe nicht mitläuft – sie verschwindet dann aus dieser Liste und ist über „Gruppe bearbeiten" wieder aktivierbar.</p>
     <ul class="umzug-list" id="umzugList"></ul>
   </section>
 
@@ -1697,72 +1698,138 @@ const UMZUG_STAMM_MIN_GAP = 3; // Mindestanzahl anderer Guggen zwischen zwei Hof
 
 function generateUmzugOrder(){
   syncUmzugWithGroups();
-  const included = state.umzug.filter(u => u.included).map(u => getGroup(u.groupId)).filter(Boolean);
+  const entries = state.umzug.filter(u => u.included);
+  const N = entries.length;
 
-  if(included.length < 2){
+  if(N < 2){
     alert("Zu wenig mitlaufende Gruppen im Umzug zum Generieren (mind. 2 nötig).");
     return;
   }
-  if(!confirm("Umzug-Reihenfolge nach Grösse neu generieren? Die aktuelle Reihenfolge der mitlaufenden Gruppen wird überschrieben.")) return;
+  const unlockedCount = entries.filter(e => !e.locked).length;
+  if(unlockedCount === 0){
+    alert("Alle mitlaufenden Gruppen sind fixiert (📌) – nichts zum Generieren übrig.");
+    return;
+  }
+  if(!confirm("Umzug-Reihenfolge nach Grösse neu generieren? Fixierte Positionen (📌) bleiben unverändert, der Rest ("+unlockedCount+" Gruppen) wird neu einsortiert.")) return;
 
-  // Zwei nach Mitgliederzahl sortierte Warteschlangen: Hofdere-Guggen (Stamm)
-  // und die übrigen Gäste-Guggen, die als "Füllmaterial" zwischen die Stamm-
-  // Guggen verteilt werden, damit der Mindestabstand eingehalten wird.
-  const stammSorted = included.filter(g => g.type === "Stamm").sort((a,b) => (a.memberCount||0) - (b.memberCount||0));
-  const gastSorted = included.filter(g => g.type !== "Stamm").sort((a,b) => (a.memberCount||0) - (b.memberCount||0));
-  const nStamm = stammSorted.length;
-  const nGast = gastSorted.length;
+  // Fixierte Positionen teilen die Liste in Segmente auf, die unabhängig
+  // voneinander neu befüllt werden. Innerhalb eines Segments (und über die
+  // Segmentgrenzen zu einer angrenzenden fixierten Hofdere-Gugge hinweg) gilt
+  // weiterhin: Hofdere-Guggen (Stamm) brauchen min. UMZUG_STAMM_MIN_GAP Abstand.
+  const segments = [];
+  let cur = [];
+  entries.forEach((entry, i) => {
+    if(entry.locked){
+      if(cur.length){ segments.push(cur); cur = []; }
+    } else {
+      cur.push(i);
+    }
+  });
+  if(cur.length) segments.push(cur);
 
-  // numBuckets Lücken: vor der ersten Stamm-Gugge, zwischen je zwei Stamm-Guggen,
-  // nach der letzten. Nur die internen (zwischen zwei Stamm-Guggen) haben ein Minimum.
-  const numBuckets = nStamm + 1;
-  const bucketSize = new Array(numBuckets).fill(0);
-  const internalIdx = []; // Indizes der internen Lücken
-  for(let i=1;i<numBuckets-1;i++) internalIdx.push(i);
-
-  const totalMin = internalIdx.length * UMZUG_STAMM_MIN_GAP;
-  let shortfallGaps = 0;
-
-  if(nGast >= totalMin){
-    internalIdx.forEach(i => bucketSize[i] = UMZUG_STAMM_MIN_GAP);
-    let extra = nGast - totalMin;
-    let i = 0;
-    while(extra > 0){ bucketSize[i % numBuckets]++; extra--; i++; }
-  } else if(internalIdx.length > 0){
-    // Nicht genug Gäste-Guggen für alle Mindestabstände: so gleichmässig wie
-    // möglich auf die internen Lücken verteilen (Rest bleibt unter dem Minimum).
-    const base = Math.floor(nGast / internalIdx.length);
-    let rem = nGast - base * internalIdx.length;
-    internalIdx.forEach(i => {
-      bucketSize[i] = base + (rem > 0 ? 1 : 0);
-      if(rem > 0) rem--;
-      if(bucketSize[i] < UMZUG_STAMM_MIN_GAP) shortfallGaps++;
-    });
+  function isLockedStammAt(i){
+    if(i < 0 || i >= N) return false;
+    const e = entries[i];
+    if(!e.locked) return false;
+    const g = getGroup(e.groupId);
+    return !!g && g.type === "Stamm";
   }
 
-  const buckets = [];
-  let cursor = 0;
-  bucketSize.forEach(size => {
-    buckets.push(gastSorted.slice(cursor, cursor+size));
-    cursor += size;
-  });
-  if(cursor < gastSorted.length) buckets[buckets.length-1].push(...gastSorted.slice(cursor));
+  const unlockedGroups = entries.filter(e => !e.locked).map(e => getGroup(e.groupId));
+  const stammSorted = unlockedGroups.filter(g => g.type === "Stamm").sort((a,b) => (a.memberCount||0) - (b.memberCount||0));
+  const gastSorted = unlockedGroups.filter(g => g.type !== "Stamm").sort((a,b) => (a.memberCount||0) - (b.memberCount||0));
+  const totalUnlocked = unlockedGroups.length;
 
-  const output = [];
-  buckets.forEach((bucket, i) => {
-    output.push(...bucket);
-    if(i < stammSorted.length) output.push(stammSorted[i]);
+  // Unlocked Hofdere-Guggen proportional zur Segmentlänge auf die Segmente
+  // verteilen (Restverteilung nach grösstem Bruchteil), dann auf die jeweilige
+  // Segmentlänge kappen und Überschuss ins nächste Segment mit Platz schieben.
+  const rawShares = segments.map(seg => stammSorted.length * seg.length / (totalUnlocked || 1));
+  const stammCounts = rawShares.map(Math.floor);
+  let remainder = stammSorted.length - stammCounts.reduce((a,b)=>a+b,0);
+  const byFrac = rawShares.map((v,i) => ({i, frac: v - Math.floor(v)})).sort((a,b) => b.frac - a.frac);
+  let fi = 0;
+  while(remainder > 0 && fi < byFrac.length){ stammCounts[byFrac[fi].i]++; remainder--; fi++; }
+  for(let s=0; s<segments.length; s++){
+    while(stammCounts[s] > segments[s].length){
+      stammCounts[s]--;
+      let s2 = (s+1) % segments.length, tries = 0;
+      while(stammCounts[s2] >= segments[s2].length && tries < segments.length){ s2 = (s2+1) % segments.length; tries++; }
+      stammCounts[s2]++;
+    }
+  }
+
+  let stammCursor = 0, gastCursor = 0, shortfallGaps = 0, totalGaps = 0;
+
+  segments.forEach((seg, s) => {
+    const segLen = seg.length;
+    const kStamm = stammCounts[s];
+    const segStamm = stammSorted.slice(stammCursor, stammCursor+kStamm);
+    stammCursor += kStamm;
+    const segGast = gastSorted.slice(gastCursor, gastCursor + (segLen - kStamm));
+    gastCursor += segLen - kStamm;
+
+    const leftLockedStamm = isLockedStammAt(seg[0]-1);
+    const rightLockedStamm = isLockedStammAt(seg[seg.length-1]+1);
+
+    if(kStamm === 0){
+      // Keine neue Hofdere-Gugge in diesem Segment - ggf. dient es als reiner
+      // Puffer zwischen zwei fixierten Hofdere-Guggen und muss lang genug sein.
+      if(leftLockedStamm && rightLockedStamm){
+        totalGaps++;
+        if(segLen < UMZUG_STAMM_MIN_GAP) shortfallGaps++;
+      }
+      seg.forEach((entryIdx, i) => { entries[entryIdx] = {groupId: segGast[i].id, included:true, locked:false}; });
+      return;
+    }
+
+    const numBuckets = kStamm + 1;
+    const bucketMin = new Array(numBuckets).fill(0);
+    for(let i=1;i<numBuckets-1;i++){ bucketMin[i] = UMZUG_STAMM_MIN_GAP; totalGaps++; }
+    if(leftLockedStamm){ bucketMin[0] = UMZUG_STAMM_MIN_GAP; totalGaps++; }
+    if(rightLockedStamm){ bucketMin[numBuckets-1] = UMZUG_STAMM_MIN_GAP; totalGaps++; }
+
+    const totalMin = bucketMin.reduce((a,b)=>a+b,0);
+    const bucketSize = bucketMin.slice();
+    if(segGast.length >= totalMin){
+      let extra = segGast.length - totalMin;
+      let bi = 0;
+      while(extra > 0){ bucketSize[bi % numBuckets]++; extra--; bi++; }
+    } else {
+      const needIdx = [];
+      for(let i=0;i<numBuckets;i++) if(bucketMin[i] > 0) needIdx.push(i);
+      const base = Math.floor(segGast.length / (needIdx.length || 1));
+      let rem = segGast.length - base * needIdx.length;
+      for(let i=0;i<numBuckets;i++) bucketSize[i] = 0;
+      needIdx.forEach(i => {
+        bucketSize[i] = base + (rem > 0 ? 1 : 0);
+        if(rem > 0) rem--;
+        if(bucketSize[i] < UMZUG_STAMM_MIN_GAP) shortfallGaps++;
+      });
+    }
+
+    const subBuckets = [];
+    let bc = 0;
+    bucketSize.forEach(size => { subBuckets.push(segGast.slice(bc, bc+size)); bc += size; });
+    if(bc < segGast.length) subBuckets[subBuckets.length-1].push(...segGast.slice(bc));
+
+    const filled = [];
+    subBuckets.forEach((bucket, i) => {
+      filled.push(...bucket);
+      if(i < segStamm.length) filled.push(segStamm[i]);
+    });
+
+    seg.forEach((entryIdx, i) => { entries[entryIdx] = {groupId: filled[i].id, included:true, locked:false}; });
   });
 
   const excludedEntries = state.umzug.filter(u => !u.included);
-  state.umzug = output.map(g => ({groupId:g.id, included:true})).concat(excludedEntries);
+  state.umzug = entries.concat(excludedEntries);
 
   saveState();
   renderUmzug();
 
-  let msg = "Umzug-Reihenfolge für "+output.length+" mitlaufende Gruppen generiert (nach Grösse sortiert, Hofdere-Guggen mit min. "+UMZUG_STAMM_MIN_GAP+" Guggen Abstand).";
+  let msg = "Umzug-Reihenfolge generiert: "+unlockedCount+" Gruppen neu einsortiert (nach Grösse, min. "+UMZUG_STAMM_MIN_GAP+" Guggen Abstand zwischen Hofdere-Guggen), "+(N-unlockedCount)+" fixierte Position(en) unverändert.";
   if(shortfallGaps > 0){
-    msg += "\n\nHinweis: Zu wenig andere Gruppen vorhanden, um den Mindestabstand bei allen Hofdere-Guggen einzuhalten (betrifft "+shortfallGaps+" von "+internalIdx.length+" Lücken zwischen Hofdere-Guggen).";
+    msg += "\n\nHinweis: Zu wenig andere Gruppen vorhanden, um den Mindestabstand bei allen Hofdere-Guggen einzuhalten (betrifft "+shortfallGaps+" von "+totalGaps+" Lücken).";
   }
   alert(msg);
 }
@@ -1783,11 +1850,13 @@ function renderUmzug(){
 
     const li = document.createElement("li");
     li.draggable = true;
+    li.className = entry.locked ? "locked" : "";
     li.setAttribute("data-index", idx);
     li.innerHTML =
       '<span class="num">'+num+'</span>'+
       '<input type="checkbox" data-umzug-check="'+idx+'" checked>'+
       '<span>'+escapeHtml(g.name)+"</span>"+
+      '<button type="button" class="icon-action" data-umzug-lock="'+idx+'" title="'+(entry.locked?"Position lösen (wird beim Generieren wieder neu einsortiert)":"Position fixieren (bleibt beim „Umzug generieren\" unangetastet)")+'">'+(entry.locked?"📌":"📍")+'</button>'+
       '<span class="members">'+g.memberCount+' Mitglieder</span>';
     list.appendChild(li);
 
@@ -1808,6 +1877,15 @@ function renderUmzug(){
     cb.addEventListener("change", () => {
       const idx = parseInt(cb.getAttribute("data-umzug-check"),10);
       state.umzug[idx].included = cb.checked;
+      saveState();
+      renderUmzug();
+    });
+  });
+
+  list.querySelectorAll("[data-umzug-lock]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const idx = parseInt(btn.getAttribute("data-umzug-lock"),10);
+      state.umzug[idx].locked = !state.umzug[idx].locked;
       saveState();
       renderUmzug();
     });
