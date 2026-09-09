@@ -408,7 +408,10 @@ td.conflict .warn-icon{color:var(--danger);margin-right:4px;cursor:help;}
   <!-- TAB 4: UMZUG -->
   <section id="tab-umzug" class="tab-content">
     <h2>Umzug</h2>
-    <p class="hint">Reihenfolge per Drag &amp; Drop anpassen. Checkbox abwählen falls Gruppe nicht mitläuft – sie verschwindet dann aus dieser Liste und ist über „Gruppe bearbeiten" wieder aktivierbar.</p>
+    <div class="toolbar">
+      <button class="btn btn-gold" id="btnGenerateUmzug">🎲 Umzug generieren (nach Grösse)</button>
+    </div>
+    <p class="hint">Ordnet die mitlaufenden Gruppen nach Mitgliederzahl (ähnlich grosse hintereinander) und hält dabei zwischen zwei Hofdere-Guggen (Stamm) mindestens 3 andere Guggen Abstand ein. Reihenfolge danach per Drag &amp; Drop feinjustierbar. Checkbox abwählen falls Gruppe nicht mitläuft – sie verschwindet dann aus dieser Liste und ist über „Gruppe bearbeiten" wieder aktivierbar.</p>
     <ul class="umzug-list" id="umzugList"></ul>
   </section>
 
@@ -1690,6 +1693,80 @@ function syncUmzugWithGroups(){
   state.umzug = state.umzug.filter(u => getGroup(u.groupId));
 }
 
+const UMZUG_STAMM_MIN_GAP = 3; // Mindestanzahl anderer Guggen zwischen zwei Hofdere-Guggen (Stamm)
+
+function generateUmzugOrder(){
+  syncUmzugWithGroups();
+  const included = state.umzug.filter(u => u.included).map(u => getGroup(u.groupId)).filter(Boolean);
+
+  if(included.length < 2){
+    alert("Zu wenig mitlaufende Gruppen im Umzug zum Generieren (mind. 2 nötig).");
+    return;
+  }
+  if(!confirm("Umzug-Reihenfolge nach Grösse neu generieren? Die aktuelle Reihenfolge der mitlaufenden Gruppen wird überschrieben.")) return;
+
+  // Zwei nach Mitgliederzahl sortierte Warteschlangen: Hofdere-Guggen (Stamm)
+  // und die übrigen Gäste-Guggen, die als "Füllmaterial" zwischen die Stamm-
+  // Guggen verteilt werden, damit der Mindestabstand eingehalten wird.
+  const stammSorted = included.filter(g => g.type === "Stamm").sort((a,b) => (a.memberCount||0) - (b.memberCount||0));
+  const gastSorted = included.filter(g => g.type !== "Stamm").sort((a,b) => (a.memberCount||0) - (b.memberCount||0));
+  const nStamm = stammSorted.length;
+  const nGast = gastSorted.length;
+
+  // numBuckets Lücken: vor der ersten Stamm-Gugge, zwischen je zwei Stamm-Guggen,
+  // nach der letzten. Nur die internen (zwischen zwei Stamm-Guggen) haben ein Minimum.
+  const numBuckets = nStamm + 1;
+  const bucketSize = new Array(numBuckets).fill(0);
+  const internalIdx = []; // Indizes der internen Lücken
+  for(let i=1;i<numBuckets-1;i++) internalIdx.push(i);
+
+  const totalMin = internalIdx.length * UMZUG_STAMM_MIN_GAP;
+  let shortfallGaps = 0;
+
+  if(nGast >= totalMin){
+    internalIdx.forEach(i => bucketSize[i] = UMZUG_STAMM_MIN_GAP);
+    let extra = nGast - totalMin;
+    let i = 0;
+    while(extra > 0){ bucketSize[i % numBuckets]++; extra--; i++; }
+  } else if(internalIdx.length > 0){
+    // Nicht genug Gäste-Guggen für alle Mindestabstände: so gleichmässig wie
+    // möglich auf die internen Lücken verteilen (Rest bleibt unter dem Minimum).
+    const base = Math.floor(nGast / internalIdx.length);
+    let rem = nGast - base * internalIdx.length;
+    internalIdx.forEach(i => {
+      bucketSize[i] = base + (rem > 0 ? 1 : 0);
+      if(rem > 0) rem--;
+      if(bucketSize[i] < UMZUG_STAMM_MIN_GAP) shortfallGaps++;
+    });
+  }
+
+  const buckets = [];
+  let cursor = 0;
+  bucketSize.forEach(size => {
+    buckets.push(gastSorted.slice(cursor, cursor+size));
+    cursor += size;
+  });
+  if(cursor < gastSorted.length) buckets[buckets.length-1].push(...gastSorted.slice(cursor));
+
+  const output = [];
+  buckets.forEach((bucket, i) => {
+    output.push(...bucket);
+    if(i < stammSorted.length) output.push(stammSorted[i]);
+  });
+
+  const excludedEntries = state.umzug.filter(u => !u.included);
+  state.umzug = output.map(g => ({groupId:g.id, included:true})).concat(excludedEntries);
+
+  saveState();
+  renderUmzug();
+
+  let msg = "Umzug-Reihenfolge für "+output.length+" mitlaufende Gruppen generiert (nach Grösse sortiert, Hofdere-Guggen mit min. "+UMZUG_STAMM_MIN_GAP+" Guggen Abstand).";
+  if(shortfallGaps > 0){
+    msg += "\n\nHinweis: Zu wenig andere Gruppen vorhanden, um den Mindestabstand bei allen Hofdere-Guggen einzuhalten (betrifft "+shortfallGaps+" von "+internalIdx.length+" Lücken zwischen Hofdere-Guggen).";
+  }
+  alert(msg);
+}
+
 let dragFromIndex = null;
 
 function renderUmzug(){
@@ -1958,6 +2035,7 @@ function initEvents(){
   document.getElementById("btnExportExcel").addEventListener("click", exportAllExcel);
 
   document.getElementById("btnGenerateBattle").addEventListener("click", generateBattleFromUmzug);
+  document.getElementById("btnGenerateUmzug").addEventListener("click", generateUmzugOrder);
 
   document.getElementById("btnCopyContacts").addEventListener("click", copyContacts);
 
