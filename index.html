@@ -410,9 +410,9 @@ td.conflict .warn-icon{color:var(--danger);margin-right:4px;cursor:help;}
   <section id="tab-umzug" class="tab-content">
     <h2>Umzug</h2>
     <div class="toolbar">
-      <button class="btn btn-gold" id="btnGenerateUmzug">🎲 Umzug generieren (nach Grösse)</button>
+      <button class="btn btn-gold" id="btnGenerateUmzug">🎲 Umzug generieren (Paare nach Grösse)</button>
     </div>
-    <p class="hint">Ordnet die mitlaufenden Gruppen nach Mitgliederzahl (ähnlich grosse hintereinander) und hält dabei zwischen zwei Hofdere-Guggen (Stamm) mindestens 3 andere Guggen Abstand ein. 📍 an einer Gruppe fixiert ihre Position (z.B. Tambouren immer zuvorderst) – „Umzug generieren" lässt fixierte (📌) Positionen unangetastet und füllt nur den Rest auf. Reihenfolge danach per Drag &amp; Drop feinjustierbar. Checkbox abwählen falls Gruppe nicht mitläuft – sie verschwindet dann aus dieser Liste und ist über „Gruppe bearbeiten" wieder aktivierbar.</p>
+    <p class="hint">Fasst ähnlich grosse Gäste-Guggen zu Zweier-Paaren zusammen (gute Battle-Gegner) und reiht diese Paare in zufälliger Reihenfolge aneinander – <em>nicht</em> nach Grösse aufsteigend sortiert. Zwischen zwei Hofdere-Guggen (Stamm) bleiben dabei mindestens 3 andere Guggen Abstand. 📍 an einer Gruppe fixiert ihre Position (z.B. Tambouren immer zuvorderst) – „Umzug generieren" lässt fixierte (📌) Positionen unangetastet und füllt nur den Rest auf. Reihenfolge danach per Drag &amp; Drop feinjustierbar. Checkbox abwählen falls Gruppe nicht mitläuft – sie verschwindet dann aus dieser Liste und ist über „Gruppe bearbeiten" wieder aktivierbar.</p>
     <ul class="umzug-list" id="umzugList"></ul>
   </section>
 
@@ -1696,6 +1696,45 @@ function syncUmzugWithGroups(){
 
 const UMZUG_STAMM_MIN_GAP = 3; // Mindestanzahl anderer Guggen zwischen zwei Hofdere-Guggen (Stamm)
 
+// Bildet aus den (nach Grösse sortierten) Gäste-Guggen Zweier-Einheiten mit
+// möglichst ähnlicher Mitgliederzahl (optimal fürs spätere Battle-Pairing),
+// und mischt die Reihenfolge dieser Einheiten zufällig. Bei ungerader Anzahl
+// bleibt eine Einheit mit nur 1 Gugge übrig und wird zufällig eingestreut.
+function buildGastUnits(gastSorted){
+  const units = [];
+  let i = 0;
+  for(; i+1 < gastSorted.length; i += 2) units.push([gastSorted[i], gastSorted[i+1]]);
+  const leftover = (i < gastSorted.length) ? gastSorted[i] : null;
+  for(let j=units.length-1;j>0;j--){
+    const k = Math.floor(Math.random()*(j+1));
+    [units[j], units[k]] = [units[k], units[j]];
+  }
+  if(leftover !== null){
+    const pos = Math.floor(Math.random()*(units.length+1));
+    units.splice(pos, 0, [leftover]);
+  }
+  return units;
+}
+
+// Zieht genau n Guggen von vorne aus einer Einheiten-Queue (mutiert sie).
+// Ganze Einheiten (Paare) bleiben nach Möglichkeit zusammen; nur wenn n mitten
+// in eine Einheit fällt, wird diese eine Einheit aufgeteilt (Rest bleibt vorne
+// in der Queue für den nächsten Aufruf).
+function drawFromUnits(units, n){
+  const out = [];
+  while(out.length < n && units.length){
+    const unit = units[0];
+    const remaining = n - out.length;
+    if(unit.length <= remaining){
+      out.push(...unit);
+      units.shift();
+    } else {
+      out.push(unit.shift());
+    }
+  }
+  return out;
+}
+
 function generateUmzugOrder(){
   syncUmzugWithGroups();
   const entries = state.umzug.filter(u => u.included);
@@ -1710,7 +1749,7 @@ function generateUmzugOrder(){
     alert("Alle mitlaufenden Gruppen sind fixiert (📌) – nichts zum Generieren übrig.");
     return;
   }
-  if(!confirm("Umzug-Reihenfolge nach Grösse neu generieren? Fixierte Positionen (📌) bleiben unverändert, der Rest ("+unlockedCount+" Gruppen) wird neu einsortiert.")) return;
+  if(!confirm("Umzug-Reihenfolge neu generieren? Ähnlich grosse Gäste-Guggen werden zu Paaren zusammengefasst (für gute Battle-Gegner) und in zufälliger Reihenfolge aneinandergereiht. Fixierte Positionen (📌) bleiben unverändert, der Rest ("+unlockedCount+" Gruppen) wird neu einsortiert.")) return;
 
   // Fixierte Positionen teilen die Liste in Segmente auf, die unabhängig
   // voneinander neu befüllt werden. Innerhalb eines Segments (und über die
@@ -1737,36 +1776,59 @@ function generateUmzugOrder(){
 
   const unlockedGroups = entries.filter(e => !e.locked).map(e => getGroup(e.groupId));
   const stammSorted = unlockedGroups.filter(g => g.type === "Stamm").sort((a,b) => (a.memberCount||0) - (b.memberCount||0));
-  const gastSorted = unlockedGroups.filter(g => g.type !== "Stamm").sort((a,b) => (a.memberCount||0) - (b.memberCount||0));
+  let gastPool = unlockedGroups.filter(g => g.type !== "Stamm").sort((a,b) => (a.memberCount||0) - (b.memberCount||0));
   const totalUnlocked = unlockedGroups.length;
 
-  // Unlocked Hofdere-Guggen proportional zur Segmentlänge auf die Segmente
+  // Jede Hofdere-Gugge bekommt vorab die grössenmässig am besten passende
+  // Gäste-Gugge als fixen Battle-Partner zugeteilt (2er-Einheit). Dadurch
+  // belegt jede Hofdere-Gugge beim Einfügen immer 2 Plätze (statt 1) und
+  // verschiebt die Positions-Parität für die nachfolgenden Gäste-Paare nicht -
+  // sonst würde die geradzahlige 1-2/3-4-Battle-Zuteilung spätere Paare wieder
+  // auseinanderreissen.
+  function nearestIdx(pool, target){
+    let bi = -1, bd = Infinity;
+    pool.forEach((g,i) => { const d = Math.abs((g.memberCount||0)-target); if(d < bd){ bd = d; bi = i; } });
+    return bi;
+  }
+  const stammUnits = stammSorted.map(s => {
+    const idx = nearestIdx(gastPool, s.memberCount||0);
+    if(idx < 0) return [s];
+    const partner = gastPool.splice(idx,1)[0];
+    return [s, partner];
+  });
+
+  // Unlocked Hofdere-Einheiten proportional zur Segmentlänge auf die Segmente
   // verteilen (Restverteilung nach grösstem Bruchteil), dann auf die jeweilige
-  // Segmentlänge kappen und Überschuss ins nächste Segment mit Platz schieben.
-  const rawShares = segments.map(seg => stammSorted.length * seg.length / (totalUnlocked || 1));
+  // Segmentkapazität (Einheiten sind i.d.R. 2 Guggen gross) kappen und
+  // Überschuss ins nächste Segment mit Platz schieben.
+  const rawShares = segments.map(seg => stammUnits.length * seg.length / (totalUnlocked || 1));
   const stammCounts = rawShares.map(Math.floor);
-  let remainder = stammSorted.length - stammCounts.reduce((a,b)=>a+b,0);
+  let remainder = stammUnits.length - stammCounts.reduce((a,b)=>a+b,0);
   const byFrac = rawShares.map((v,i) => ({i, frac: v - Math.floor(v)})).sort((a,b) => b.frac - a.frac);
   let fi = 0;
   while(remainder > 0 && fi < byFrac.length){ stammCounts[byFrac[fi].i]++; remainder--; fi++; }
+  const segCap = segments.map(seg => Math.max(0, Math.floor(seg.length / 2)));
   for(let s=0; s<segments.length; s++){
-    while(stammCounts[s] > segments[s].length){
+    while(stammCounts[s] > segCap[s]){
+      let s2 = -1;
+      for(let k=0;k<segments.length;k++){
+        if(k !== s && stammCounts[k] < segCap[k]){ s2 = k; break; }
+      }
+      if(s2 === -1) break; // kein anderes Segment hat mehr Platz -> Rest bleibt hier (führt ggf. zu einer Hinweis-Warnung)
       stammCounts[s]--;
-      let s2 = (s+1) % segments.length, tries = 0;
-      while(stammCounts[s2] >= segments[s2].length && tries < segments.length){ s2 = (s2+1) % segments.length; tries++; }
       stammCounts[s2]++;
     }
   }
 
-  let stammCursor = 0, gastCursor = 0, shortfallGaps = 0, totalGaps = 0;
+  const gastUnits = buildGastUnits(gastPool);
+  let stammCursor = 0, shortfallGaps = 0, totalGaps = 0;
 
   segments.forEach((seg, s) => {
     const segLen = seg.length;
     const kStamm = stammCounts[s];
-    const segStamm = stammSorted.slice(stammCursor, stammCursor+kStamm);
+    const segStamm = stammUnits.slice(stammCursor, stammCursor+kStamm);
     stammCursor += kStamm;
-    const segGast = gastSorted.slice(gastCursor, gastCursor + (segLen - kStamm));
-    gastCursor += segLen - kStamm;
+    const stammItemsUsed = segStamm.reduce((sum,u)=>sum+u.length, 0);
 
     const leftLockedStamm = isLockedStammAt(seg[0]-1);
     const rightLockedStamm = isLockedStammAt(seg[seg.length-1]+1);
@@ -1778,44 +1840,57 @@ function generateUmzugOrder(){
         totalGaps++;
         if(segLen < UMZUG_STAMM_MIN_GAP) shortfallGaps++;
       }
+      const segGast = drawFromUnits(gastUnits, segLen);
       seg.forEach((entryIdx, i) => { entries[entryIdx] = {groupId: segGast[i].id, included:true, locked:false}; });
       return;
     }
 
+    // Zwischen zwei eigenen Hofdere-Einheiten liefert der Partner der
+    // vorherigen Einheit schon 1 Puffer-Gugge, daher genügt dort ein Minimum
+    // von UMZUG_STAMM_MIN_GAP-1 an zusätzlichem Füllmaterial. Am linken Rand
+    // (angrenzend an eine fixierte Hofdere-Gugge ohne eigenen Partner) braucht
+    // es das volle Minimum; am rechten Rand hilft wieder der Partner der
+    // letzten eigenen Einheit mit.
     const numBuckets = kStamm + 1;
     const bucketMin = new Array(numBuckets).fill(0);
-    for(let i=1;i<numBuckets-1;i++){ bucketMin[i] = UMZUG_STAMM_MIN_GAP; totalGaps++; }
+    for(let i=1;i<numBuckets-1;i++){ bucketMin[i] = UMZUG_STAMM_MIN_GAP - 1; totalGaps++; }
     if(leftLockedStamm){ bucketMin[0] = UMZUG_STAMM_MIN_GAP; totalGaps++; }
-    if(rightLockedStamm){ bucketMin[numBuckets-1] = UMZUG_STAMM_MIN_GAP; totalGaps++; }
+    if(rightLockedStamm){ bucketMin[numBuckets-1] = UMZUG_STAMM_MIN_GAP - 1; totalGaps++; }
 
+    const gastNeeded = Math.max(0, segLen - stammItemsUsed);
     const totalMin = bucketMin.reduce((a,b)=>a+b,0);
     const bucketSize = bucketMin.slice();
-    if(segGast.length >= totalMin){
-      let extra = segGast.length - totalMin;
+    if(gastNeeded >= totalMin){
+      let extra = gastNeeded - totalMin;
+      // Ungerade Buckets zuerst auf eine gerade Zahl aufrunden, damit Gäste-
+      // Paare möglichst selten an einer Bucket-Grenze auseinandergerissen
+      // werden müssen (Paare sind immer 2 Guggen gross).
+      for(let i=0;i<numBuckets && extra>0;i++){
+        if(bucketSize[i] % 2 !== 0){ bucketSize[i]++; extra--; }
+      }
       let bi = 0;
-      while(extra > 0){ bucketSize[bi % numBuckets]++; extra--; bi++; }
+      while(extra >= 2){ bucketSize[bi % numBuckets] += 2; extra -= 2; bi++; }
+      if(extra === 1) bucketSize[bi % numBuckets] += 1;
     } else {
       const needIdx = [];
       for(let i=0;i<numBuckets;i++) if(bucketMin[i] > 0) needIdx.push(i);
-      const base = Math.floor(segGast.length / (needIdx.length || 1));
-      let rem = segGast.length - base * needIdx.length;
+      const base = Math.floor(gastNeeded / (needIdx.length || 1));
+      let rem = gastNeeded - base * needIdx.length;
       for(let i=0;i<numBuckets;i++) bucketSize[i] = 0;
       needIdx.forEach(i => {
         bucketSize[i] = base + (rem > 0 ? 1 : 0);
         if(rem > 0) rem--;
-        if(bucketSize[i] < UMZUG_STAMM_MIN_GAP) shortfallGaps++;
+        if(bucketSize[i] < bucketMin[i]) shortfallGaps++;
       });
     }
 
-    const subBuckets = [];
-    let bc = 0;
-    bucketSize.forEach(size => { subBuckets.push(segGast.slice(bc, bc+size)); bc += size; });
-    if(bc < segGast.length) subBuckets[subBuckets.length-1].push(...segGast.slice(bc));
-
+    // Jeder Bucket zieht direkt aus der gemeinsamen, gemischten Paar-Queue -
+    // so bleiben ähnlich grosse Gäste-Guggen als Nachbarn (Battle-Paar)
+    // zusammen, ausser eine Einheit muss an einer Bucket-Grenze aufgeteilt werden.
     const filled = [];
-    subBuckets.forEach((bucket, i) => {
-      filled.push(...bucket);
-      if(i < segStamm.length) filled.push(segStamm[i]);
+    bucketSize.forEach((size, i) => {
+      filled.push(...drawFromUnits(gastUnits, size));
+      if(i < segStamm.length) filled.push(...segStamm[i]);
     });
 
     seg.forEach((entryIdx, i) => { entries[entryIdx] = {groupId: filled[i].id, included:true, locked:false}; });
@@ -1827,7 +1902,7 @@ function generateUmzugOrder(){
   saveState();
   renderUmzug();
 
-  let msg = "Umzug-Reihenfolge generiert: "+unlockedCount+" Gruppen neu einsortiert (nach Grösse, min. "+UMZUG_STAMM_MIN_GAP+" Guggen Abstand zwischen Hofdere-Guggen), "+(N-unlockedCount)+" fixierte Position(en) unverändert.";
+  let msg = "Umzug-Reihenfolge generiert: "+unlockedCount+" Gruppen neu einsortiert (ähnlich grosse Guggen als Paare, zufällige Reihenfolge, min. "+UMZUG_STAMM_MIN_GAP+" Guggen Abstand zwischen Hofdere-Guggen), "+(N-unlockedCount)+" fixierte Position(en) unverändert.";
   if(shortfallGaps > 0){
     msg += "\n\nHinweis: Zu wenig andere Gruppen vorhanden, um den Mindestabstand bei allen Hofdere-Guggen einzuhalten (betrifft "+shortfallGaps+" von "+totalGaps+" Lücken).";
   }
