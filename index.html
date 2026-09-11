@@ -398,6 +398,7 @@ td.conflict .warn-icon{color:var(--danger);margin-right:4px;cursor:help;}
     <h2>Gruppen</h2>
     <div class="toolbar">
       <button class="btn btn-gold" id="btnAddGroup">＋ Gruppe hinzufügen</button>
+      <button class="btn btn-secondary" id="btnEmailImport">📧 Aus E-Mail importieren</button>
       <button class="btn btn-secondary dienstag-only" id="btnCopyContactsFromSamstag" style="display:none;">📋 Kontaktdaten von Samstag kopieren</button>
     </div>
     <table id="groupsTable">
@@ -572,6 +573,24 @@ td.conflict .warn-icon{color:var(--danger);margin-right:4px;cursor:help;}
     <div class="modal-body" id="summaryModalBody"></div>
     <div class="modal-footer">
       <button class="btn btn-gold" data-close="summaryModalOverlay">Plan ansehen</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Aus E-Mail importieren -->
+<div class="modal-overlay" id="emailImportModalOverlay">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3>Gruppe aus E-Mail importieren</h3>
+      <button class="close-x" data-close="emailImportModalOverlay">×</button>
+    </div>
+    <div class="modal-body">
+      <p class="hint">Passend zum Anmeldeformular von fasnacht-hofdere.ch. Mail-Text im Mail-Programm markieren (Cmd/Strg+A), kopieren und hier einfügen. Das Gruppen-Formular wird danach vorausgefüllt geöffnet, damit du alles prüfen und anpassen kannst, bevor du speicherst.</p>
+      <textarea id="emailImportText" rows="14" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:6px;font-family:inherit;font-size:13px;box-sizing:border-box;"></textarea>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" data-close="emailImportModalOverlay">Abbrechen</button>
+      <button class="btn btn-gold" id="btnEmailImportGo">Felder erkennen &amp; Formular öffnen</button>
     </div>
   </div>
 </div>
@@ -2166,6 +2185,120 @@ function renderLogistik(){
   }).join("");
 }
 
+/* ======================================================================
+   E-MAIL-IMPORT
+   ------------------------------------------------------------------
+   Passgenau auf das WPForms-Anmeldeformular von fasnacht-hofdere.ch
+   zugeschnitten: jedes Feld erscheint dort als eigene Zeile mit fettem
+   Label, gefolgt vom Wert in der/den nächsten Zeile(n). Der Parser sucht
+   nach diesen exakten Labels und ordnet die jeweils folgenden Zeilen bis
+   zum nächsten bekannten Label als Wert zu. Längere/spezifischere Labels
+   stehen zuerst, damit z.B. "Natel-Nummer (Auftritt)" nicht fälschlich
+   schon als "Natel-Nummer" erkannt wird.
+   ====================================================================== */
+
+const EMAIL_IMPORT_LABELS = [
+  ["Zusätzlich gewünschte Auftritte", "auftritte", true],
+  ["Fasnachtstage", "fasnachtstage", false],
+  ["Vereinsart", "_ignore", false],
+  ["Vereinsname", "vereinsname", false],
+  ["Anzahl Mitglieder", "mitglieder", false],
+  ["geplante Anreisezeit", "anreise", false],
+  ["geplante Abreisezeit", "abreise", false],
+  ["Carparkplatz benötigt", "carpark", false],
+  ["Instrumentenanhängerplatz benötigt", "anhaenger", false],
+  ["Znachtessen erwünscht", "znacht", true],
+  ["Präsident", "praesidentName", false],
+  ["Auftrittchef", "tourName", true],
+  ["Strasse / Nr. (Kassier)", "_ignore", false],
+  ["PLZ Ort (Kassier)", "_ignore", false],
+  ["Natel-Nummer (Auftritt)", "tourTel", false],
+  ["Natel-Nummer", "praesidentTel", false],
+  ["E-Mail", "tourEmail", false],
+  ["Email", "praesidentEmail", false],
+  ["Bemerkungen", "bemerkungen", false]
+];
+
+function parseEmailText(text){
+  const lines = text.split(/\r?\n/).map(l => l.trim());
+  function matchLabel(line){
+    for(const [label, key, isPrefix] of EMAIL_IMPORT_LABELS){
+      if(isPrefix ? line.startsWith(label) : line === label) return key;
+    }
+    return null;
+  }
+  const buckets = {};
+  let currentKey = null;
+  lines.forEach(line => {
+    const key = matchLabel(line);
+    if(key){ currentKey = key; buckets[key] = []; return; }
+    if(currentKey && line) buckets[currentKey].push(line);
+  });
+  const values = {};
+  Object.keys(buckets).forEach(k => { values[k] = buckets[k].join(" ").trim(); });
+  return values;
+}
+
+// Wandelt "13.15" (Formular-Format mit Punkt) in "13:15" (HH:MM fürs
+// <input type=time>) um. Kommt der Wert schon mit Doppelpunkt, funktioniert's genauso.
+function normalizeTimeForInput(raw){
+  if(!raw) return "";
+  const m = raw.trim().match(/^(\d{1,2})[.:](\d{2})$/);
+  if(!m) return "";
+  return m[1].padStart(2,"0")+":"+m[2];
+}
+
+function openEmailImportModal(){
+  document.getElementById("emailImportText").value = "";
+  document.getElementById("emailImportModalOverlay").classList.add("active");
+}
+
+function importFromEmail(){
+  const text = document.getElementById("emailImportText").value;
+  if(!text.trim()){ alert("Bitte zuerst den E-Mail-Text einfügen."); return; }
+
+  const p = parseEmailText(text);
+  const foundCount = Object.keys(p).filter(k => p[k]).length;
+  if(foundCount < 2){
+    if(!confirm("Es konnten nur wenige Felder erkannt werden (falsches Format?). Trotzdem ein Formular mit den erkannten Feldern öffnen?")) return;
+  }
+
+  closeModal("emailImportModalOverlay");
+  openGroupModal(null);
+
+  if(p.vereinsname) document.getElementById("gName").value = p.vereinsname;
+  if(p.mitglieder) document.getElementById("gMembers").value = parseInt(p.mitglieder,10) || 0;
+  const arrival = normalizeTimeForInput(p.anreise);
+  if(arrival) document.getElementById("gArrival").value = arrival;
+  const departure = normalizeTimeForInput(p.abreise);
+  if(departure) document.getElementById("gDeparture").value = departure;
+  if(p.carpark) document.getElementById("gCarPark").checked = /ja/i.test(p.carpark);
+  if(p.anhaenger) document.getElementById("gTrailer").checked = /ja/i.test(p.anhaenger);
+  if(p.znacht) document.getElementById("gDinner").checked = /ja/i.test(p.znacht);
+  if(p.auftritte !== undefined){
+    const extra = parseInt(p.auftritte,10);
+    if(!isNaN(extra)){
+      // "einer ist garantiert" -> zusätzlich zum garantierten Auftritt.
+      document.getElementById("gDesired").value = extra + 1;
+      document.getElementById("gDesiredAny").checked = false;
+      updateDesiredFieldState();
+    }
+  }
+  if(p.praesidentName) document.getElementById("gPrName").value = p.praesidentName;
+  if(p.praesidentTel) document.getElementById("gPrPhone").value = p.praesidentTel;
+  if(p.praesidentEmail) document.getElementById("gPrMail").value = p.praesidentEmail;
+  if(p.tourName) document.getElementById("gTmName").value = p.tourName;
+  if(p.tourTel) document.getElementById("gTmPhone").value = p.tourTel;
+  if(p.tourEmail) document.getElementById("gTmMail").value = p.tourEmail;
+  if(p.bemerkungen){
+    editingWishes.push({id: uid("wish"), locationId:"", time:"", note: p.bemerkungen});
+    renderWishRows();
+  }
+  if(p.fasnachtstage){
+    alert('Erkannter Tag-Hinweis aus der Mail:\n"'+p.fasnachtstage+'"\n\nPrüfe, ob das zum aktuell gewählten Tag ('+(currentDay==="samstag"?"Samstag":"Dienstag")+') passt.');
+  }
+}
+
 // Öffnet ein Auswahl-Modal mit allen Samstag-Gruppen, damit man gezielt nur
 // einzelne davon nach Dienstag kopieren kann (statt zwingend alle).
 function openCopyContactsModal(){
@@ -2404,6 +2537,8 @@ function initTabs(){
 
 function initEvents(){
   document.getElementById("btnAddGroup").addEventListener("click", () => openGroupModal(null));
+  document.getElementById("btnEmailImport").addEventListener("click", openEmailImportModal);
+  document.getElementById("btnEmailImportGo").addEventListener("click", importFromEmail);
   document.getElementById("btnCopyContactsFromSamstag").addEventListener("click", openCopyContactsModal);
   document.getElementById("btnCopyContactsSelected").addEventListener("click", copySelectedContactsFromSamstag);
   document.getElementById("copyContactsSelectAll").addEventListener("change", (e) => {
