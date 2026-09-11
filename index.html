@@ -80,6 +80,21 @@ header .sub{
 .day-switch-btn.active{background:var(--gold);color:var(--dark-red);}
 .day-switch-btn:not(.active):hover{background:rgba(255,255,255,.15);}
 
+.pending-badge{
+  position:absolute;top:-4px;right:-4px;
+  background:var(--gold);color:var(--dark-red);
+  font-size:10px;font-weight:800;
+  min-width:16px;height:16px;padding:0 3px;
+  border-radius:9px;
+  display:flex;align-items:center;justify-content:center;
+  line-height:1;
+}
+.pending-card{background:#fff;border:1px solid var(--border);border-left:5px solid var(--gold);border-radius:6px;padding:12px 14px;margin-bottom:12px;}
+.pending-card .pending-fields{font-size:13px;color:#444;margin:8px 0;line-height:1.6;}
+.pending-card .pending-fields b{color:var(--ink);}
+.pending-card .pending-hint{font-size:12px;color:#888;font-style:italic;margin-bottom:8px;}
+.pending-card .pending-actions{display:flex;gap:8px;justify-content:flex-end;}
+
 nav.tabs{
   display:flex;
   background:var(--ink);
@@ -376,6 +391,9 @@ td.conflict .warn-icon{color:var(--danger);margin-right:4px;cursor:help;}
       <button class="day-switch-btn" data-day="dienstag" id="btnDaySwitchDienstag">Dienstag</button>
     </div>
     <div style="display:flex;gap:10px;align-items:center;">
+      <button class="icon-btn" id="btnPendingRegistrations" title="Neue Anmeldungen" style="position:relative;display:none;">
+        📥<span id="pendingBadge" class="pending-badge"></span>
+      </button>
       <button class="icon-btn" id="btnExportExcel" title="Alles als Excel exportieren">⬇</button>
       <button class="icon-btn" id="btnLogout" title="Abmelden">⎋</button>
       <button class="icon-btn" id="btnSettings" title="Einstellungen">⚙</button>
@@ -577,6 +595,20 @@ td.conflict .warn-icon{color:var(--danger);margin-right:4px;cursor:help;}
   </div>
 </div>
 
+<!-- MODAL: Neue Anmeldungen (aus Zapier/Firestore) -->
+<div class="modal-overlay" id="pendingRegistrationsModalOverlay">
+  <div class="modal-box wide">
+    <div class="modal-header">
+      <h3>Neue Anmeldungen</h3>
+      <button class="close-x" data-close="pendingRegistrationsModalOverlay">×</button>
+    </div>
+    <div class="modal-body" id="pendingRegistrationsList"></div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" data-close="pendingRegistrationsModalOverlay">Schliessen</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL: Aus E-Mail importieren -->
 <div class="modal-overlay" id="emailImportModalOverlay">
   <div class="modal-box">
@@ -669,7 +701,8 @@ import {
   getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut
 } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-auth.js";
 import {
-  getFirestore, doc, getDoc, setDoc, onSnapshot
+  getFirestore, doc, getDoc, setDoc, onSnapshot,
+  collection, query, where, deleteDoc
 } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -686,10 +719,14 @@ const fbApp = initializeApp(firebaseConfig);
 const auth = getAuth(fbApp);
 const db = getFirestore(fbApp);
 const sharedStateRef = doc(db, "fasnachtPlaner", "sharedState");
+const pendingRegistrationsCol = collection(db, "pendingRegistrations");
 
 let applyingRemoteUpdate = false;
 let saveDebounceTimer = null;
 let unsubscribeSnapshot = null;
+let unsubscribePending = null;
+let pendingRegistrations = [];   // aus Firestore synchronisierte, noch nicht freigegebene Anmeldungen (z.B. via Zapier)
+let approvingPendingId = null;   // welche pendingRegistration gerade im Gruppen-Formular bearbeitet wird
 
 /* ======================================================================
    DATENMODELL / DEFAULTS
@@ -844,6 +881,26 @@ function startFirestoreSync(){
 
 function stopFirestoreSync(){
   if(unsubscribeSnapshot){ unsubscribeSnapshot(); unsubscribeSnapshot = null; }
+}
+
+// Separate Collection für unbestätigte Anmeldungen (z.B. via Zapier aus
+// eingehenden E-Mails), komplett unabhängig vom eigentlichen App-Zustand-
+// Dokument - schreibt Zapier hier hinein, kann das nie mit einem laufenden
+// saveState()-Schreibvorgang der App kollidieren.
+function startPendingRegistrationsSync(){
+  if(unsubscribePending) unsubscribePending();
+  const q = query(pendingRegistrationsCol, where("status", "==", "pending"));
+  unsubscribePending = onSnapshot(q, (snap) => {
+    pendingRegistrations = snap.docs.map(d => ({id: d.id, ...d.data()}));
+    renderPendingBadge();
+  }, (err) => {
+    console.error("Fehler beim Laden der ausstehenden Anmeldungen.", err);
+  });
+}
+
+function stopPendingRegistrationsSync(){
+  if(unsubscribePending){ unsubscribePending(); unsubscribePending = null; }
+  pendingRegistrations = [];
 }
 
 function showApp(){
@@ -1454,6 +1511,11 @@ function saveGroupFromModal(){
   const umzugEntry = state.umzug.find(u => u.groupId === data.id);
   if(umzugEntry) umzugEntry.included = umzugIncluded;
   saveState();
+  if(approvingPendingId){
+    deleteDoc(doc(db, "pendingRegistrations", approvingPendingId)).catch(e => {
+      console.error("Konnte übernommene Anmeldung nicht aus der Warteliste entfernen.", e);
+    });
+  }
   closeModal("groupModalOverlay");
   renderAll();
 }
@@ -2303,19 +2365,10 @@ function openEmailImportModal(){
   document.getElementById("emailImportModalOverlay").classList.add("active");
 }
 
-function importFromEmail(){
-  const text = document.getElementById("emailImportText").value;
-  if(!text.trim()){ alert("Bitte zuerst den E-Mail-Text einfügen."); return; }
-
-  const p = parseEmailText(text);
-  const foundCount = Object.keys(p).filter(k => p[k]).length;
-  if(foundCount < 2){
-    if(!confirm("Es konnten nur wenige Felder erkannt werden (falsches Format?). Trotzdem ein Formular mit den erkannten Feldern öffnen?")) return;
-  }
-
-  closeModal("emailImportModalOverlay");
-  openGroupModal(null);
-
+// Befüllt das (bereits offene, leere) Gruppen-Formular mit geparsten Werten -
+// gemeinsam genutzt vom manuellen E-Mail-Import und von der Übernahme einer
+// per Zapier eingegangenen pendingRegistration (gleiches Feld-Schema).
+function fillGroupModalFromParsed(p){
   if(p.vereinsname) document.getElementById("gName").value = p.vereinsname;
   if(p.mitglieder) document.getElementById("gMembers").value = parseInt(p.mitglieder,10) || 0;
   const arrival = normalizeTimeForInput(p.anreise);
@@ -2325,7 +2378,7 @@ function importFromEmail(){
   if(p.carpark) document.getElementById("gCarPark").checked = /ja/i.test(p.carpark);
   if(p.anhaenger) document.getElementById("gTrailer").checked = /ja/i.test(p.anhaenger);
   if(p.znacht) document.getElementById("gDinner").checked = /ja/i.test(p.znacht);
-  if(p.auftritte !== undefined){
+  if(p.auftritte !== undefined && p.auftritte !== null && p.auftritte !== ""){
     const wanted = parseInt(p.auftritte,10);
     if(!isNaN(wanted)){
       // "einer ist garantiert" -> steht 0 im Formular, ist trotzdem 1 (der
@@ -2349,6 +2402,97 @@ function importFromEmail(){
   if(p.fasnachtstage){
     alert('Erkannter Tag-Hinweis aus der Mail:\n"'+p.fasnachtstage+'"\n\nPrüfe, ob das zum aktuell gewählten Tag ('+(currentDay==="samstag"?"Samstag":"Dienstag")+') passt.');
   }
+}
+
+function importFromEmail(){
+  const text = document.getElementById("emailImportText").value;
+  if(!text.trim()){ alert("Bitte zuerst den E-Mail-Text einfügen."); return; }
+
+  const p = parseEmailText(text);
+  const foundCount = Object.keys(p).filter(k => p[k]).length;
+  if(foundCount < 2){
+    if(!confirm("Es konnten nur wenige Felder erkannt werden (falsches Format?). Trotzdem ein Formular mit den erkannten Feldern öffnen?")) return;
+  }
+
+  closeModal("emailImportModalOverlay");
+  openGroupModal(null);
+  fillGroupModalFromParsed(p);
+}
+
+// Öffnet ein Auswahl-Modal mit allen Samstag-Gruppen, damit man gezielt nur
+// einzelne davon nach Dienstag kopieren kann (statt zwingend alle).
+/* ======================================================================
+   NEUE ANMELDUNGEN (pendingRegistrations, z.B. via Zapier aus E-Mails)
+   ====================================================================== */
+
+function renderPendingBadge(){
+  const btn = document.getElementById("btnPendingRegistrations");
+  const badge = document.getElementById("pendingBadge");
+  const n = pendingRegistrations.length;
+  btn.style.display = n > 0 ? "" : "none";
+  badge.textContent = n;
+  if(document.getElementById("pendingRegistrationsModalOverlay").classList.contains("active")){
+    renderPendingRegistrationsList();
+  }
+}
+
+function pendingFieldLine(label, value){
+  return value ? "<b>"+escapeHtml(label)+":</b> "+escapeHtml(value)+"<br>" : "";
+}
+
+function renderPendingRegistrationsList(){
+  const list = document.getElementById("pendingRegistrationsList");
+  if(!pendingRegistrations.length){
+    list.innerHTML = '<p class="hint">Keine neuen Anmeldungen.</p>';
+    return;
+  }
+  list.innerHTML = pendingRegistrations.map(r => {
+    let html = '<div class="pending-card">';
+    html += "<h3 style='margin:0 0 6px;'>"+escapeHtml(r.vereinsname||"(kein Name erkannt)")+"</h3>";
+    if(r.fasnachtstage) html += '<div class="pending-hint">Tag-Hinweis aus der Mail: "'+escapeHtml(r.fasnachtstage)+'"</div>';
+    html += '<div class="pending-fields">';
+    html += pendingFieldLine("Mitglieder", r.mitglieder);
+    html += pendingFieldLine("Anreise", r.anreise);
+    html += pendingFieldLine("Abreise", r.abreise);
+    html += pendingFieldLine("Präsident", r.praesidentName);
+    html += pendingFieldLine("Tourmanager", r.tourName);
+    html += pendingFieldLine("Bemerkungen", r.bemerkungen);
+    html += "</div>";
+    html += '<div class="pending-actions">';
+    html += '<button class="btn btn-secondary btn-small" data-pending-reject="'+r.id+'">🗑 Verwerfen</button>';
+    html += '<button class="btn btn-gold btn-small" data-pending-approve="'+r.id+'">✅ Übernehmen (für '+(currentDay==="samstag"?"Samstag":"Dienstag")+')</button>';
+    html += "</div></div>";
+    return html;
+  }).join("");
+
+  list.querySelectorAll("[data-pending-approve]").forEach(btn => {
+    btn.addEventListener("click", () => approvePendingRegistration(btn.getAttribute("data-pending-approve")));
+  });
+  list.querySelectorAll("[data-pending-reject]").forEach(btn => {
+    btn.addEventListener("click", () => rejectPendingRegistration(btn.getAttribute("data-pending-reject")));
+  });
+}
+
+function openPendingRegistrationsModal(){
+  renderPendingRegistrationsList();
+  document.getElementById("pendingRegistrationsModalOverlay").classList.add("active");
+}
+
+function approvePendingRegistration(id){
+  const reg = pendingRegistrations.find(r => r.id === id);
+  if(!reg) return;
+  approvingPendingId = id;
+  closeModal("pendingRegistrationsModalOverlay");
+  openGroupModal(null);
+  fillGroupModalFromParsed(reg);
+}
+
+function rejectPendingRegistration(id){
+  if(!confirm("Diese Anmeldung wirklich verwerfen? Sie wird dauerhaft gelöscht.")) return;
+  deleteDoc(doc(db, "pendingRegistrations", id)).catch(e => {
+    console.error("Konnte Anmeldung nicht löschen.", e);
+    alert("Verwerfen fehlgeschlagen. Bitte nochmal versuchen.");
+  });
 }
 
 // Öffnet ein Auswahl-Modal mit allen Samstag-Gruppen, damit man gezielt nur
@@ -2538,6 +2682,10 @@ function deleteAllData(){
 
 function closeModal(id){
   document.getElementById(id).classList.remove("active");
+  // Gruppen-Formular abgebrochen, ohne zu speichern -> Verknüpfung zur
+  // pendingRegistration wieder lösen, sonst würde die nächste gespeicherte
+  // Gruppe (irgendeine) fälschlich diese Anmeldung löschen.
+  if(id === "groupModalOverlay") approvingPendingId = null;
 }
 
 document.querySelectorAll("[data-close]").forEach(btn => {
@@ -2608,6 +2756,7 @@ function initEvents(){
   document.getElementById("btnResetPlan").addEventListener("click", resetPlan);
   document.getElementById("btnPrintPlan").addEventListener("click", () => window.print());
   document.getElementById("btnExportExcel").addEventListener("click", exportAllExcel);
+  document.getElementById("btnPendingRegistrations").addEventListener("click", openPendingRegistrationsModal);
 
   document.getElementById("btnGenerateBattle").addEventListener("click", generateBattleFromUmzug);
   document.getElementById("btnGenerateUmzug").addEventListener("click", generateUmzugOrder);
@@ -2666,8 +2815,10 @@ onAuthStateChanged(auth, async (user) => {
     showApp();
     await initialLoadFromFirestore();
     startFirestoreSync();
+    startPendingRegistrationsSync();
   }else{
     stopFirestoreSync();
+    stopPendingRegistrationsSync();
     showLoginGate();
   }
 });
