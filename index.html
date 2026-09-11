@@ -2276,10 +2276,12 @@ function importFromEmail(){
   if(p.anhaenger) document.getElementById("gTrailer").checked = /ja/i.test(p.anhaenger);
   if(p.znacht) document.getElementById("gDinner").checked = /ja/i.test(p.znacht);
   if(p.auftritte !== undefined){
-    const extra = parseInt(p.auftritte,10);
-    if(!isNaN(extra)){
-      // "einer ist garantiert" -> zusätzlich zum garantierten Auftritt.
-      document.getElementById("gDesired").value = extra + 1;
+    const wanted = parseInt(p.auftritte,10);
+    if(!isNaN(wanted)){
+      // "einer ist garantiert" -> steht 0 im Formular, ist trotzdem 1 (der
+      // garantierte) gemeint; bei jedem anderen Wert ist das direkt die
+      // gewünschte Gesamtzahl.
+      document.getElementById("gDesired").value = wanted === 0 ? 1 : wanted;
       document.getElementById("gDesiredAny").checked = false;
       updateDesiredFieldState();
     }
