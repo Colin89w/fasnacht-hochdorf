@@ -319,6 +319,10 @@ td.conflict .warn-icon{color:var(--danger);margin-right:4px;cursor:help;}
 .wish-row .wish-time{width:110px;}
 .wish-row .wish-note{flex:1;}
 
+.copy-contacts-row{display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--border);}
+.copy-contacts-row.already-exists{opacity:.5;}
+.copy-contacts-row .note{font-size:12px;color:#777;margin-left:auto;}
+
 .warning-banner{
   background:#fdecea;border:1px solid var(--danger);color:var(--danger);
   padding:10px 14px;border-radius:6px;margin-bottom:14px;font-size:14px;
@@ -568,6 +572,27 @@ td.conflict .warn-icon{color:var(--danger);margin-right:4px;cursor:help;}
     <div class="modal-body" id="summaryModalBody"></div>
     <div class="modal-footer">
       <button class="btn btn-gold" data-close="summaryModalOverlay">Plan ansehen</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Kontaktdaten von Samstag kopieren -->
+<div class="modal-overlay" id="copyContactsModalOverlay">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3>Gruppen von Samstag kopieren</h3>
+      <button class="close-x" data-close="copyContactsModalOverlay">×</button>
+    </div>
+    <div class="modal-body">
+      <p class="hint">Nur Name, Typ und Kontaktdaten (Tourmanager/Präsident) werden übernommen. Auftritts-Felder (Zeiten, Standorte, Wünsche) sind am Dienstag anders und starten leer.</p>
+      <div class="form-field checkbox" style="margin-bottom:10px;">
+        <input type="checkbox" id="copyContactsSelectAll"><label>Alle auswählen</label>
+      </div>
+      <div id="copyContactsList"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" data-close="copyContactsModalOverlay">Abbrechen</button>
+      <button class="btn btn-gold" id="btnCopyContactsSelected">Ausgewählte kopieren</button>
     </div>
   </div>
 </div>
@@ -2141,13 +2166,9 @@ function renderLogistik(){
   }).join("");
 }
 
-// Kopiert Name/Typ/Kontaktdaten (Tourmanager, Präsident) von allen Samstag-
-// Gruppen nach Dienstag. Auftritts-spezifische Felder (Anreise, Wünsche,
-// Parkplatz usw.) starten für die neuen Dienstag-Gruppen bei den Standard-
-// werten, da es ein komplett anderer Tag ist. Gruppen, die am Dienstag schon
-// unter demselben Namen existieren, werden übersprungen (nichts wird
-// überschrieben).
-function copyContactsFromSamstag(){
+// Öffnet ein Auswahl-Modal mit allen Samstag-Gruppen, damit man gezielt nur
+// einzelne davon nach Dienstag kopieren kann (statt zwingend alle).
+function openCopyContactsModal(){
   if(currentDay !== "dienstag") return;
   const samstagGroups = rootState.samstag.groups;
   if(!samstagGroups.length){
@@ -2155,10 +2176,36 @@ function copyContactsFromSamstag(){
     return;
   }
   const existingNames = new Set(state.groups.map(g => g.name.trim().toLowerCase()));
-  let copied = 0, skipped = 0;
+  const list = document.getElementById("copyContactsList");
+  list.innerHTML = samstagGroups.map(sg => {
+    const exists = existingNames.has(sg.name.trim().toLowerCase());
+    return '<div class="copy-contacts-row'+(exists?" already-exists":"")+'">'+
+      '<input type="checkbox" class="copy-contacts-check" value="'+sg.id+'" '+(exists?"disabled":"")+'>'+
+      '<span>'+escapeHtml(sg.name)+'</span>'+
+      (sg.type==="Stamm" ? '<span class="tag-stamm">Stamm</span>' : '<span class="tag-gast">Gast</span>')+
+      (exists ? '<span class="note">bereits am Dienstag vorhanden</span>' : "")+
+      "</div>";
+  }).join("");
+  document.getElementById("copyContactsSelectAll").checked = false;
+  document.getElementById("copyContactsModalOverlay").classList.add("active");
+}
 
-  samstagGroups.forEach(sg => {
-    if(existingNames.has(sg.name.trim().toLowerCase())){ skipped++; return; }
+// Kopiert Name/Typ/Kontaktdaten (Tourmanager, Präsident) der ausgewählten
+// Samstag-Gruppen nach Dienstag. Auftritts-spezifische Felder (Anreise,
+// Wünsche, Standorte/Zeiten usw.) starten für die neuen Dienstag-Gruppen bei
+// den Standardwerten, da Zeiten und Standorte am Dienstag anders sind.
+function copySelectedContactsFromSamstag(){
+  const checked = [...document.querySelectorAll(".copy-contacts-check:checked")].map(cb => cb.value);
+  if(!checked.length){
+    alert("Bitte mindestens eine Gruppe auswählen.");
+    return;
+  }
+  const samstagGroups = rootState.samstag.groups;
+  let copied = 0;
+
+  checked.forEach(sgId => {
+    const sg = samstagGroups.find(g => g.id === sgId);
+    if(!sg) return;
     const newGroup = {
       id: uid("grp"),
       name: sg.name,
@@ -2178,13 +2225,13 @@ function copyContactsFromSamstag(){
     };
     state.groups.push(newGroup);
     state.umzug.push({groupId:newGroup.id, included:true});
-    existingNames.add(newGroup.name.trim().toLowerCase());
     copied++;
   });
 
   saveState();
+  closeModal("copyContactsModalOverlay");
   renderAll();
-  alert("Kontaktdaten kopiert: "+copied+" neue Gruppe"+(copied===1?"":"n")+" von Samstag übernommen"+(skipped>0 ? ", "+skipped+" bereits vorhanden (übersprungen)." : "."));
+  alert(copied+" Gruppe"+(copied===1?"":"n")+" von Samstag kopiert.");
 }
 
 function copyContacts(){
@@ -2357,7 +2404,11 @@ function initTabs(){
 
 function initEvents(){
   document.getElementById("btnAddGroup").addEventListener("click", () => openGroupModal(null));
-  document.getElementById("btnCopyContactsFromSamstag").addEventListener("click", copyContactsFromSamstag);
+  document.getElementById("btnCopyContactsFromSamstag").addEventListener("click", openCopyContactsModal);
+  document.getElementById("btnCopyContactsSelected").addEventListener("click", copySelectedContactsFromSamstag);
+  document.getElementById("copyContactsSelectAll").addEventListener("change", (e) => {
+    document.querySelectorAll(".copy-contacts-check:not(:disabled)").forEach(cb => { cb.checked = e.target.checked; });
+  });
   document.getElementById("btnAddWish").addEventListener("click", () => {
     editingWishes.push({id: uid("wish"), locationId:"", time:"", note:""});
     renderWishRows();
