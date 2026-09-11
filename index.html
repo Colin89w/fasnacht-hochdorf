@@ -2219,7 +2219,51 @@ const EMAIL_IMPORT_LABELS = [
   ["Bemerkungen", "bemerkungen", false]
 ];
 
-function parseEmailText(text){
+// Dekodiert Quoted-Printable (z.B. "=C3=A4" -> "ä", weiche Zeilenumbrüche mit
+// endendem "=" werden zusammengeführt). Kommt kein einziges "=XX"-Hex-Escape
+// vor, ist der Text vermutlich schon normaler Klartext und wird unverändert
+// zurückgegeben.
+function decodeQuotedPrintable(text){
+  const joined = text.replace(/=\r?\n/g, "");
+  if(!/=[0-9A-Fa-f]{2}/.test(joined)) return text;
+  const bytes = [];
+  for(let i=0;i<joined.length;i++){
+    if(joined[i] === "=" && /^[0-9A-Fa-f]{2}$/.test(joined.substr(i+1,2))){
+      bytes.push(parseInt(joined.substr(i+1,2), 16));
+      i += 2;
+    } else {
+      bytes.push(joined.charCodeAt(i));
+    }
+  }
+  try{
+    return new TextDecoder("utf-8").decode(new Uint8Array(bytes));
+  }catch(e){
+    return joined;
+  }
+}
+
+// Macht aus eingefügtem Text die reinen, sichtbaren Formular-Zeilen - egal ob
+// jemand den fertig angezeigten Mail-Text einfügt, oder die komplette
+// .eml-Rohdatei (SMTP-Kopfzeilen + Quoted-Printable + HTML): Kopfzeilen werden
+// abgeschnitten, Quoted-Printable dekodiert (behebt kaputte Umlaute), und aus
+// HTML wird per DOM der sichtbare Text extrahiert.
+function extractEmailBody(raw){
+  let text = raw;
+  const headerBoundary = text.search(/\r?\n\r?\n/);
+  if(headerBoundary !== -1 && /^[\w-]+:\s/.test(text.slice(0,200))){
+    text = text.slice(headerBoundary);
+  }
+  text = decodeQuotedPrintable(text);
+  if(/<\/?[a-z][\s\S]*>/i.test(text)){
+    const tmp = document.createElement("div");
+    tmp.innerHTML = text.replace(/<br\s*\/?>/gi, "\n").replace(/<\/(tr|td|div|p)>/gi, "\n");
+    text = tmp.textContent || tmp.innerText || "";
+  }
+  return text;
+}
+
+function parseEmailText(rawText){
+  const text = extractEmailBody(rawText);
   const lines = text.split(/\r?\n/).map(l => l.trim());
   function matchLabel(line){
     for(const [label, key, isPrefix] of EMAIL_IMPORT_LABELS){
