@@ -2264,10 +2264,16 @@ function extractEmailBody(raw){
 
 function parseEmailText(rawText){
   const text = extractEmailBody(rawText);
-  const lines = text.split(/\r?\n/).map(l => l.trim());
+  // NFC-normalisieren: macOS liefert eingefügten Text (je nach Quelle/App)
+  // manchmal mit zerlegten Umlauten (z.B. "a" + Combining-Diaeresis statt
+  // dem einen Zeichen "ä"). Optisch identisch, aber "===" schlägt sonst
+  // fehl und Labels mit Umlaut (Präsident, Zusätzlich, erwünscht) werden
+  // nicht erkannt - die Zeile rutscht dann in den vorherigen Wert.
+  const lines = text.split(/\r?\n/).map(l => l.trim().normalize("NFC"));
   function matchLabel(line){
     for(const [label, key, isPrefix] of EMAIL_IMPORT_LABELS){
-      if(isPrefix ? line.startsWith(label) : line === label) return key;
+      const normLabel = label.normalize("NFC");
+      if(isPrefix ? line.startsWith(normLabel) : line === normLabel) return key;
     }
     return null;
   }
