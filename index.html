@@ -65,6 +65,21 @@ header .sub{
 }
 .icon-btn:hover{background:var(--gold);color:var(--dark-red);}
 
+.day-switch{display:flex;border:2px solid var(--gold);border-radius:20px;overflow:hidden;}
+.day-switch-btn{
+  background:transparent;
+  border:none;
+  color:#fff;
+  padding:7px 16px;
+  font-size:13px;
+  font-family:var(--font-body);
+  font-weight:600;
+  cursor:pointer;
+  transition:.15s;
+}
+.day-switch-btn.active{background:var(--gold);color:var(--dark-red);}
+.day-switch-btn:not(.active):hover{background:rgba(255,255,255,.15);}
+
 nav.tabs{
   display:flex;
   background:var(--ink);
@@ -333,6 +348,17 @@ td.conflict .warn-icon{color:var(--danger);margin-right:4px;cursor:help;}
   </form>
 </div>
 
+<div id="dayGate" style="display:none;position:fixed;inset:0;background:var(--dark-red);align-items:center;justify-content:center;z-index:9999;">
+  <div style="background:var(--cream);padding:32px 40px;border-radius:10px;box-shadow:0 8px 30px rgba(0,0,0,.4);text-align:center;">
+    <h2 style="margin:0 0 6px;color:var(--dark-red);">Welcher Tag?</h2>
+    <div style="font-size:13px;color:#665;margin-bottom:24px;">Samstag und Dienstag sind komplett getrennte Planungen.</div>
+    <div style="display:flex;gap:14px;">
+      <button class="btn btn-gold btn-big" id="btnDayGateSamstag">📅 Samstag</button>
+      <button class="btn btn-gold btn-big" id="btnDayGateDienstag">📅 Dienstag</button>
+    </div>
+  </div>
+</div>
+
 <div id="appRoot" style="display:none;">
 
 <header>
@@ -340,18 +366,24 @@ td.conflict .warn-icon{color:var(--danger);margin-right:4px;cursor:help;}
     <h1 id="eventTitle">Fasnacht Hofdere</h1>
     <div class="sub" id="eventSubtitle">Guggenmusik Veranstaltungsplanung</div>
   </div>
-  <div style="display:flex;gap:10px;align-items:center;">
-    <button class="icon-btn" id="btnExportExcel" title="Alles als Excel exportieren">⬇</button>
-    <button class="icon-btn" id="btnLogout" title="Abmelden">⎋</button>
-    <button class="icon-btn" id="btnSettings" title="Einstellungen">⚙</button>
+  <div style="display:flex;gap:14px;align-items:center;">
+    <div class="day-switch" id="daySwitch">
+      <button class="day-switch-btn" data-day="samstag" id="btnDaySwitchSamstag">Samstag</button>
+      <button class="day-switch-btn" data-day="dienstag" id="btnDaySwitchDienstag">Dienstag</button>
+    </div>
+    <div style="display:flex;gap:10px;align-items:center;">
+      <button class="icon-btn" id="btnExportExcel" title="Alles als Excel exportieren">⬇</button>
+      <button class="icon-btn" id="btnLogout" title="Abmelden">⎋</button>
+      <button class="icon-btn" id="btnSettings" title="Einstellungen">⚙</button>
+    </div>
   </div>
 </header>
 
 <nav class="tabs">
   <button class="tab-btn active" data-tab="tab-gruppen">Gruppen</button>
   <button class="tab-btn" data-tab="tab-planung">Auftritte-Planung</button>
-  <button class="tab-btn" data-tab="tab-battle">Battle-Plan</button>
-  <button class="tab-btn" data-tab="tab-umzug">Umzug</button>
+  <button class="tab-btn samstag-only" data-tab="tab-battle">Battle-Plan</button>
+  <button class="tab-btn samstag-only" data-tab="tab-umzug">Umzug</button>
   <button class="tab-btn" data-tab="tab-logistik">Logistik &amp; Kontakte</button>
 </nav>
 
@@ -362,12 +394,13 @@ td.conflict .warn-icon{color:var(--danger);margin-right:4px;cursor:help;}
     <h2>Gruppen</h2>
     <div class="toolbar">
       <button class="btn btn-gold" id="btnAddGroup">＋ Gruppe hinzufügen</button>
+      <button class="btn btn-secondary dienstag-only" id="btnCopyContactsFromSamstag" style="display:none;">📋 Kontaktdaten von Samstag kopieren</button>
     </div>
     <table id="groupsTable">
       <thead>
         <tr>
           <th>Name</th><th>Typ</th><th>Anreise</th><th>Abreise</th>
-          <th>Ø Auftritte</th><th>Wünsche</th><th>Mitglieder</th><th>Parkplatz</th><th>Anhänger</th><th>Znacht</th>
+          <th>Ø Auftritte</th><th>Wünsche</th><th>Mitglieder</th><th>Parkplatz</th><th>Anhänger</th><th class="samstag-only">Znacht</th>
           <th>Tourmanager</th><th>Präsident</th><th></th>
         </tr>
       </thead>
@@ -419,10 +452,10 @@ td.conflict .warn-icon{color:var(--danger);margin-right:4px;cursor:help;}
   <!-- TAB 5: LOGISTIK -->
   <section id="tab-logistik" class="tab-content">
     <h2>Logistik &amp; Kontakte</h2>
-    <h3>Parkplätze / Anhänger / Znachtessen</h3>
+    <h3 id="logisticsHeading">Parkplätze / Anhänger / Znachtessen</h3>
     <table id="logisticsTable">
       <thead>
-        <tr><th>Gruppe</th><th>Mitglieder</th><th>Parkplatz</th><th>Anhänger</th><th>Znachtessen</th></tr>
+        <tr><th>Gruppe</th><th>Mitglieder</th><th>Parkplatz</th><th>Anhänger</th><th class="samstag-only">Znachtessen</th></tr>
       </thead>
       <tbody id="logisticsTbody"></tbody>
       <tfoot id="logisticsTfoot"></tfoot>
@@ -483,13 +516,13 @@ td.conflict .warn-icon{color:var(--danger);margin-right:4px;cursor:help;}
         <div class="form-field checkbox">
           <input type="checkbox" id="gTrailer"><label>Anhänger-Platz benötigt</label>
         </div>
-        <div class="form-field checkbox">
+        <div class="form-field checkbox samstag-only">
           <input type="checkbox" id="gDinner"><label>Znachtessen</label>
         </div>
-        <div class="form-field checkbox">
+        <div class="form-field checkbox samstag-only">
           <input type="checkbox" id="gBattleParticipate" checked><label>Macht beim Battle mit</label>
         </div>
-        <div class="form-field checkbox">
+        <div class="form-field checkbox samstag-only">
           <input type="checkbox" id="gUmzugParticipate" checked><label>Macht beim Umzug mit</label>
         </div>
 
@@ -639,9 +672,14 @@ function createDefaultBattles(){
   return arr;
 }
 
-function createDefaultState(){
+// Samstag und Dienstag sind komplett unabhängige, gleich aufgebaute Tages-
+// Datensätze (eigene Gruppen, eigener Plan, eigene Standorte/Einstellungen).
+// Battle-Plan und Umzug existieren strukturell auch für Dienstag (einfacherer,
+// einheitlicher Datenaufbau), werden dort aber per UI (Tabs ausgeblendet)
+// nicht verwendet.
+function createDefaultDayState(day){
   return {
-    eventName:"Fasnacht Hofdere",
+    eventName: day === "dienstag" ? "Fasnacht Hofdere – Dienstag" : "Fasnacht Hofdere",
     eventDate:"",
     minBuffer:30,
     locations:createDefaultLocations(),
@@ -652,11 +690,21 @@ function createDefaultState(){
   };
 }
 
-const STORAGE_KEY = "fasnachtHofdereState";
-let state = null;
+function createDefaultRootState(){
+  return {
+    samstag: createDefaultDayState("samstag"),
+    dienstag: createDefaultDayState("dienstag")
+  };
+}
 
-function normalizeState(parsed){
-  const def = createDefaultState();
+const STORAGE_KEY = "fasnachtHofdereState";
+const DAY_KEY = "fasnachtHofdereDay";
+let rootState = null;
+let state = null;         // Live-Referenz auf rootState[currentDay]
+let currentDay = null;    // "samstag" | "dienstag" | null (noch nicht gewählt)
+
+function normalizeDayState(parsed, day){
+  const def = createDefaultDayState(day);
   const s = Object.assign(def, parsed);
   if(!s.locations || !s.locations.length) s.locations = def.locations;
   if(!s.battles || s.battles.length !== 9) s.battles = def.battles;
@@ -674,8 +722,30 @@ function normalizeState(parsed){
   return s;
 }
 
+function normalizeRootState(parsed){
+  if(!parsed) return createDefaultRootState();
+  if(!parsed.samstag && !parsed.dienstag){
+    // Migration: altes Format (ein einzelner Tag ohne Tages-Aufteilung) ->
+    // wird komplett zu "Samstag", "Dienstag" startet leer.
+    return {
+      samstag: normalizeDayState(parsed, "samstag"),
+      dienstag: createDefaultDayState("dienstag")
+    };
+  }
+  return {
+    samstag: normalizeDayState(parsed.samstag || {}, "samstag"),
+    dienstag: normalizeDayState(parsed.dienstag || {}, "dienstag")
+  };
+}
+
+function setCurrentDay(day){
+  currentDay = day;
+  state = rootState[day];
+  localStorage.setItem(DAY_KEY, day);
+}
+
 function saveState(){
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(rootState));
   if(applyingRemoteUpdate) return;
   clearTimeout(saveDebounceTimer);
   saveDebounceTimer = setTimeout(pushStateToFirestore, 800);
@@ -683,17 +753,17 @@ function saveState(){
 
 function pushStateToFirestore(){
   if(!auth.currentUser) return;
-  setDoc(sharedStateRef, state).catch(e => console.error("Konnte Daten nicht mit Firestore synchronisieren.", e));
+  setDoc(sharedStateRef, rootState).catch(e => console.error("Konnte Daten nicht mit Firestore synchronisieren.", e));
 }
 
 function loadState(){
   const raw = localStorage.getItem(STORAGE_KEY);
-  if(!raw){ state = createDefaultState(); return; }
+  if(!raw){ rootState = createDefaultRootState(); return; }
   try{
-    state = normalizeState(JSON.parse(raw));
+    rootState = normalizeRootState(JSON.parse(raw));
   }catch(e){
     console.error("Konnte gespeicherte Daten nicht lesen, verwende Standardzustand.", e);
-    state = createDefaultState();
+    rootState = createDefaultRootState();
   }
 }
 
@@ -714,9 +784,14 @@ function startFirestoreSync(){
     if(snap.metadata.hasPendingWrites) return;
     if(isFormFieldFocused()) return;
     applyingRemoteUpdate = true;
-    state = normalizeState(snap.data());
-    saveState();
-    renderAll();
+    rootState = normalizeRootState(snap.data());
+    if(currentDay){
+      state = rootState[currentDay];
+      saveState();
+      renderAll();
+    } else {
+      saveState();
+    }
     applyingRemoteUpdate = false;
   }, (err) => {
     console.error("Firestore-Sync-Fehler.", err);
@@ -729,25 +804,69 @@ function stopFirestoreSync(){
 
 function showApp(){
   document.getElementById("loginGate").style.display = "none";
-  document.getElementById("appRoot").style.display = "";
 }
 
 function showLoginGate(){
   document.getElementById("loginGate").style.display = "flex";
+  document.getElementById("dayGate").style.display = "none";
   document.getElementById("appRoot").style.display = "none";
+  currentDay = null;
+  state = null;
+}
+
+function showDayGate(){
+  document.getElementById("dayGate").style.display = "flex";
+  document.getElementById("appRoot").style.display = "none";
+}
+
+function chooseDay(day){
+  setCurrentDay(day);
+  document.getElementById("dayGate").style.display = "none";
+  document.getElementById("appRoot").style.display = "";
+  applyDayVisibility();
+  renderAll();
+}
+
+function switchDay(day){
+  if(day === currentDay) return;
+  setCurrentDay(day);
+  applyDayVisibility();
+  renderAll();
+}
+
+// Blendet Battle-Plan/Umzug (nur Samstag) passend aus/ein, markiert den
+// aktiven Tag im Umschalter, und weicht von einem jetzt ausgeblendeten Tab
+// automatisch auf "Gruppen" aus.
+function applyDayVisibility(){
+  const isSamstag = currentDay === "samstag";
+  document.querySelectorAll(".samstag-only").forEach(el => {
+    el.style.display = isSamstag ? "" : "none";
+  });
+  document.querySelectorAll(".dienstag-only").forEach(el => {
+    el.style.display = isSamstag ? "none" : "";
+  });
+  document.querySelectorAll(".day-switch-btn").forEach(btn => {
+    btn.classList.toggle("active", btn.getAttribute("data-day") === currentDay);
+  });
+  if(!isSamstag){
+    const activeTabBtn = document.querySelector(".tab-btn.active");
+    if(activeTabBtn && activeTabBtn.classList.contains("samstag-only")){
+      document.querySelector('.tab-btn[data-tab="tab-gruppen"]').click();
+    }
+  }
 }
 
 async function initialLoadFromFirestore(){
   try{
     const snap = await getDoc(sharedStateRef);
     if(snap.exists()){
-      state = normalizeState(snap.data());
+      rootState = normalizeRootState(snap.data());
     }
   }catch(e){
     console.error("Konnte Firestore-Daten nicht laden, verwende lokalen Stand.", e);
   }
   saveState();
-  renderAll();
+  showDayGate();
 }
 
 /* ======================================================================
@@ -1136,7 +1255,7 @@ function renderGroups(){
       "<td>"+g.memberCount+"</td>"+
       "<td>"+(g.carPark?"✓":"–")+"</td>"+
       "<td>"+(g.trailer?"✓":"–")+"</td>"+
-      "<td>"+(g.dinner?"✓":"–")+"</td>"+
+      '<td class="samstag-only">'+(g.dinner?"✓":"–")+"</td>"+
       "<td>"+escapeHtml(g.tourManager.name||"–")+"</td>"+
       "<td>"+escapeHtml(g.president.name||"–")+"</td>"+
       "<td>"+
@@ -1158,13 +1277,16 @@ function renderGroups(){
   const totalTrailer = state.groups.filter(g=>g.trailer).length;
   const totalDinnerPersons = state.groups.filter(g=>g.dinner).reduce((s,g)=>s+(g.memberCount||0),0);
 
-  document.getElementById("groupsSummary").innerHTML = [
+  const summaryStats = [
     ["Gruppen total", state.groups.length],
     ["Mitglieder total", totalMembers],
     ["Carparkplätze", totalPark],
-    ["Anhänger", totalTrailer],
-    ["Znachtessen (Personen)", totalDinnerPersons]
-  ].map(([lbl,num]) => '<div class="stat-card"><div class="num">'+num+'</div><div class="lbl">'+lbl+'</div></div>').join("");
+    ["Anhänger", totalTrailer]
+  ];
+  if(currentDay === "samstag") summaryStats.push(["Znachtessen (Personen)", totalDinnerPersons]);
+
+  document.getElementById("groupsSummary").innerHTML = summaryStats
+    .map(([lbl,num]) => '<div class="stat-card"><div class="num">'+num+'</div><div class="lbl">'+lbl+'</div></div>').join("");
 }
 
 function escapeHtml(s){
@@ -1442,10 +1564,13 @@ function addExcelSheet(wb, sheetName, rows){
 }
 
 function buildGruppenRows(){
-  const header = ["Name","Typ","Anreise","Abreise","Ø Auftritte","Wünsche","Mitglieder","Parkplatz","Anhänger","Znachtessen","Tourmanager","Präsident"];
+  const isSamstag = currentDay === "samstag";
+  const header = ["Name","Typ","Anreise","Abreise","Ø Auftritte","Wünsche","Mitglieder","Parkplatz","Anhänger"];
+  if(isSamstag) header.push("Znachtessen");
+  header.push("Tourmanager","Präsident");
   const rows = [header];
   state.groups.forEach(g => {
-    rows.push([
+    const row = [
       g.name,
       g.type,
       g.arrival || "",
@@ -1454,19 +1579,21 @@ function buildGruppenRows(){
       wishesSummary(g),
       g.memberCount,
       g.carPark ? "Ja" : "Nein",
-      g.trailer ? "Ja" : "Nein",
-      g.dinner ? "Ja" : "Nein",
-      g.tourManager.name || "",
-      g.president.name || ""
-    ]);
+      g.trailer ? "Ja" : "Nein"
+    ];
+    if(isSamstag) row.push(g.dinner ? "Ja" : "Nein");
+    row.push(g.tourManager.name || "", g.president.name || "");
+    rows.push(row);
   });
   return rows;
 }
 
 function buildPlanungRows(){
+  const isSamstag = currentDay === "samstag";
   const header = ["Gruppe", "Typ", "Wünsche"];
   state.locations.forEach(loc => header.push(loc.name));
-  header.push("Battle", "Auftritte (Ist/Soll)");
+  if(isSamstag) header.push("Battle");
+  header.push("Auftritte (Ist/Soll)");
 
   const rows = [header];
   state.groups.forEach(g => {
@@ -1474,11 +1601,13 @@ function buildPlanungRows(){
     state.locations.forEach(loc => {
       row.push((state.plan[g.id] && state.plan[g.id][loc.id]) || "");
     });
-    const battleEntries = [];
-    state.battles.forEach((b, idx) => {
-      if(b.group1Id===g.id || b.group2Id===g.id) battleEntries.push("Slot "+(idx+1)+" ("+battleSlotLabel(idx)+")");
-    });
-    row.push(battleEntries.join(", "));
+    if(isSamstag){
+      const battleEntries = [];
+      state.battles.forEach((b, idx) => {
+        if(b.group1Id===g.id || b.group2Id===g.id) battleEntries.push("Slot "+(idx+1)+" ("+battleSlotLabel(idx)+")");
+      });
+      row.push(battleEntries.join(", "));
+    }
 
     const assignedCount = countGroupAssignments(g.id);
     const target = g.desiredCount||0;
@@ -1525,22 +1654,19 @@ function buildUmzugRows(){
 }
 
 function buildLogistikRows(){
-  const header = ["Gruppe","Mitglieder","Parkplatz","Anhänger","Znachtessen","Tourmanager Name","Tourmanager Telefon","Tourmanager Mail","Präsident Name","Präsident Telefon","Präsident Mail"];
+  const isSamstag = currentDay === "samstag";
+  const header = ["Gruppe","Mitglieder","Parkplatz","Anhänger"];
+  if(isSamstag) header.push("Znachtessen");
+  header.push("Tourmanager Name","Tourmanager Telefon","Tourmanager Mail","Präsident Name","Präsident Telefon","Präsident Mail");
   const rows = [header];
   state.groups.forEach(g => {
-    rows.push([
-      g.name,
-      g.memberCount,
-      g.carPark ? "Ja" : "Nein",
-      g.trailer ? "Ja" : "Nein",
-      g.dinner ? "Ja" : "Nein",
-      g.tourManager.name || "",
-      g.tourManager.phone || "",
-      g.tourManager.email || "",
-      g.president.name || "",
-      g.president.phone || "",
-      g.president.email || ""
-    ]);
+    const row = [g.name, g.memberCount, g.carPark ? "Ja" : "Nein", g.trailer ? "Ja" : "Nein"];
+    if(isSamstag) row.push(g.dinner ? "Ja" : "Nein");
+    row.push(
+      g.tourManager.name || "", g.tourManager.phone || "", g.tourManager.email || "",
+      g.president.name || "", g.president.phone || "", g.president.email || ""
+    );
+    rows.push(row);
   });
   return rows;
 }
@@ -1553,12 +1679,14 @@ function exportAllExcel(){
   const wb = XLSX.utils.book_new();
   addExcelSheet(wb, "Gruppen", buildGruppenRows());
   addExcelSheet(wb, "Auftritte-Planung", buildPlanungRows());
-  addExcelSheet(wb, "Battle-Plan", buildBattleRows());
-  addExcelSheet(wb, "Umzug", buildUmzugRows());
+  if(currentDay === "samstag"){
+    addExcelSheet(wb, "Battle-Plan", buildBattleRows());
+    addExcelSheet(wb, "Umzug", buildUmzugRows());
+  }
   addExcelSheet(wb, "Logistik & Kontakte", buildLogistikRows());
 
   const datePart = state.eventDate || "export";
-  XLSX.writeFile(wb, "fasnacht-hofdere_"+datePart+".xlsx");
+  XLSX.writeFile(wb, "fasnacht-hofdere_"+currentDay+"_"+datePart+".xlsx");
 }
 
 /* ======================================================================
@@ -1972,6 +2100,11 @@ function renderUmzug(){
    ====================================================================== */
 
 function renderLogistik(){
+  const isSamstag = currentDay === "samstag";
+  document.getElementById("logisticsHeading").textContent = isSamstag
+    ? "Parkplätze / Anhänger / Znachtessen"
+    : "Parkplätze / Anhänger";
+
   const tbody = document.getElementById("logisticsTbody");
   tbody.innerHTML = "";
   state.groups.forEach(g => {
@@ -1982,7 +2115,7 @@ function renderLogistik(){
       "<td>"+g.memberCount+"</td>"+
       "<td>"+(g.carPark?"✓":"–")+"</td>"+
       "<td>"+(g.trailer?"✓":"–")+"</td>"+
-      "<td>"+(g.dinner?"✓":"–")+"</td>";
+      (isSamstag ? '<td class="samstag-only">'+(g.dinner?"✓":"–")+"</td>" : "");
     tbody.appendChild(tr);
   });
 
@@ -1991,7 +2124,8 @@ function renderLogistik(){
   const totalTrailer = state.groups.filter(g=>g.trailer).length;
   const totalDinnerPersons = state.groups.filter(g=>g.dinner).reduce((s,g)=>s+(g.memberCount||0),0);
   document.getElementById("logisticsTfoot").innerHTML =
-    "<tr><th>Total</th><th>"+totalMembers+"</th><th>"+totalPark+"</th><th>"+totalTrailer+"</th><th>"+totalDinnerPersons+" Pers.</th></tr>";
+    "<tr><th>Total</th><th>"+totalMembers+"</th><th>"+totalPark+"</th><th>"+totalTrailer+"</th>"+
+    (isSamstag ? '<th class="samstag-only">'+totalDinnerPersons+" Pers.</th>" : "")+"</tr>";
 
   const contactList = document.getElementById("contactList");
   contactList.innerHTML = state.groups.map(g => {
@@ -2005,6 +2139,52 @@ function renderLogistik(){
         (g.president.email ? ' · <a href="mailto:'+escapeHtml(g.president.email)+'">'+escapeHtml(g.president.email)+'</a>' : "")+
     "</div>";
   }).join("");
+}
+
+// Kopiert Name/Typ/Kontaktdaten (Tourmanager, Präsident) von allen Samstag-
+// Gruppen nach Dienstag. Auftritts-spezifische Felder (Anreise, Wünsche,
+// Parkplatz usw.) starten für die neuen Dienstag-Gruppen bei den Standard-
+// werten, da es ein komplett anderer Tag ist. Gruppen, die am Dienstag schon
+// unter demselben Namen existieren, werden übersprungen (nichts wird
+// überschrieben).
+function copyContactsFromSamstag(){
+  if(currentDay !== "dienstag") return;
+  const samstagGroups = rootState.samstag.groups;
+  if(!samstagGroups.length){
+    alert("Am Samstag sind noch keine Gruppen erfasst.");
+    return;
+  }
+  const existingNames = new Set(state.groups.map(g => g.name.trim().toLowerCase()));
+  let copied = 0, skipped = 0;
+
+  samstagGroups.forEach(sg => {
+    if(existingNames.has(sg.name.trim().toLowerCase())){ skipped++; return; }
+    const newGroup = {
+      id: uid("grp"),
+      name: sg.name,
+      type: sg.type,
+      memberCount: 0,
+      arrival: "",
+      departure: "",
+      desiredMode: "any",
+      desiredCount: 0,
+      carPark: false,
+      trailer: false,
+      dinner: false,
+      battleParticipate: true,
+      tourManager: {...sg.tourManager},
+      president: {...sg.president},
+      wishes: []
+    };
+    state.groups.push(newGroup);
+    state.umzug.push({groupId:newGroup.id, included:true});
+    existingNames.add(newGroup.name.trim().toLowerCase());
+    copied++;
+  });
+
+  saveState();
+  renderAll();
+  alert("Kontaktdaten kopiert: "+copied+" neue Gruppe"+(copied===1?"":"n")+" von Samstag übernommen"+(skipped>0 ? ", "+skipped+" bereits vorhanden (übersprungen)." : "."));
 }
 
 function copyContacts(){
@@ -2077,12 +2257,13 @@ function addLocation(){
 }
 
 function exportData(){
-  const blob = new Blob([JSON.stringify(state, null, 2)], {type:"application/json"});
+  // Exportiert IMMER beide Tage (Samstag + Dienstag) als vollständiges Backup,
+  // unabhängig davon, welcher Tag gerade aktiv ist.
+  const blob = new Blob([JSON.stringify(rootState, null, 2)], {type:"application/json"});
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  const datePart = state.eventDate || "export";
-  a.download = "fasnacht-hofdere_"+datePart+".json";
+  a.download = "fasnacht-hofdere_alle-tage_"+new Date().toISOString().slice(0,10)+".json";
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
@@ -2094,8 +2275,9 @@ function importData(file){
   reader.onload = () => {
     try{
       const parsed = JSON.parse(reader.result);
-      if(!confirm("Import überschreibt alle aktuellen Daten. Fortfahren?")) return;
-      state = normalizeState(parsed);
+      if(!confirm("Import überschreibt alle aktuellen Daten (Samstag UND Dienstag). Fortfahren?")) return;
+      rootState = normalizeRootState(parsed);
+      state = rootState[currentDay];
       saveState();
       renderAll();
       renderSettingsModal();
@@ -2108,10 +2290,11 @@ function importData(file){
 }
 
 function deleteAllData(){
-  if(!confirm("Wirklich ALLE Daten löschen? Dieser Schritt kann nicht rückgängig gemacht werden.")) return;
-  if(!confirm("Letzte Bestätigung: Alle Gruppen, Pläne und Einstellungen werden entfernt.")) return;
+  if(!confirm("Wirklich ALLE Daten löschen (Samstag UND Dienstag)? Dieser Schritt kann nicht rückgängig gemacht werden.")) return;
+  if(!confirm("Letzte Bestätigung: Alle Gruppen, Pläne und Einstellungen beider Tage werden entfernt.")) return;
   localStorage.removeItem(STORAGE_KEY);
-  state = createDefaultState();
+  rootState = createDefaultRootState();
+  state = rootState[currentDay];
   saveState();
   renderAll();
   renderSettingsModal();
@@ -2174,6 +2357,7 @@ function initTabs(){
 
 function initEvents(){
   document.getElementById("btnAddGroup").addEventListener("click", () => openGroupModal(null));
+  document.getElementById("btnCopyContactsFromSamstag").addEventListener("click", copyContactsFromSamstag);
   document.getElementById("btnAddWish").addEventListener("click", () => {
     editingWishes.push({id: uid("wish"), locationId:"", time:"", note:""});
     renderWishRows();
@@ -2211,7 +2395,11 @@ function initEvents(){
 loadState();
 initTabs();
 initEvents();
-renderAll();
+
+document.getElementById("btnDayGateSamstag").addEventListener("click", () => chooseDay("samstag"));
+document.getElementById("btnDayGateDienstag").addEventListener("click", () => chooseDay("dienstag"));
+document.getElementById("btnDaySwitchSamstag").addEventListener("click", () => switchDay("samstag"));
+document.getElementById("btnDaySwitchDienstag").addEventListener("click", () => switchDay("dienstag"));
 
 document.getElementById("loginForm").addEventListener("submit", async (e) => {
   e.preventDefault();
