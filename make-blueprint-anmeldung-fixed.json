@@ -106,7 +106,7 @@
             "version": 1,
             "parameters": {
                 "global": false,
-                "pattern": "Vereinsname[ \\t]*\\r?\\n(?:[ \\t]*\\r?\\n)*[ \\t]*(.*?)[ \\t]*\\r?\\n[\\s\\S]*?Zus.{1,2}tzlich gew.{1,2}nschte Auftritte[^\\r\\n]*\\r?\\n(?:[ \\t]*\\r?\\n)*[ \\t]*(.*?)[ \\t]*\\r?\\n[\\s\\S]*?Anzahl[ \\t]+Mitglieder[ \\t]*\\r?\\n(?:[ \\t]*\\r?\\n)*[ \\t]*(.*?)[ \\t]*\\r?\\n[\\s\\S]*?geplante[ \\t]+Anreisezeit[ \\t]*\\r?\\n(?:[ \\t]*\\r?\\n)*[ \\t]*(.*?)[ \\t]*\\r?\\n[\\s\\S]*?geplante[ \\t]+Abreisezeit[ \\t]*\\r?\\n(?:[ \\t]*\\r?\\n)*[ \\t]*(.*?)[ \\t]*\\r?\\n[\\s\\S]*?Carparkplatz[ \\t]+ben.{1,2}tigt[ \\t]*\\r?\\n(?:[ \\t]*\\r?\\n)*[ \\t]*(.*?)[ \\t]*\\r?\\n[\\s\\S]*?Instrumentenanh.{1,2}ngerplatz[ \\t]+ben.{1,2}tigt[ \\t]*\\r?\\n(?:[ \\t]*\\r?\\n)*[ \\t]*(.*?)[ \\t]*\\r?\\n[\\s\\S]*?Znachtessen erw.{1,2}nscht[^\\r\\n]*\\r?\\n(?:[ \\t]*\\r?\\n)*[ \\t]*(.*?)[ \\t]*\\r?\\n[\\s\\S]*?Pr.{1,2}sident[ \\t]*\\r?\\n(?:[ \\t]*\\r?\\n)*[ \\t]*(.*?)[ \\t]*\\r?\\n[\\s\\S]*?Email[ \\t]*\\r?\\n(?:[ \\t]*\\r?\\n)*[ \\t]*(.*?)[ \\t]*\\r?\\n[\\s\\S]*?Natel-Nummer[ \\t]*\\r?\\n(?:[ \\t]*\\r?\\n)*[ \\t]*(.*?)[ \\t]*\\r?\\n[\\s\\S]*?Auftrittchef[^\\r\\n]*\\r?\\n(?:[ \\t]*\\r?\\n)*[ \\t]*(.*?)[ \\t]*\\r?\\n[\\s\\S]*?Natel-Nummer[ \\t]+\\(Auftritt\\)[ \\t]*\\r?\\n(?:[ \\t]*\\r?\\n)*[ \\t]*(.*?)[ \\t]*\\r?\\n[\\s\\S]*?E-Mail[ \\t]*\\r?\\n(?:[ \\t]*\\r?\\n)*[ \\t]*(.*?)[ \\t]*\\r?\\n[\\s\\S]*?Bemerkungen[ \\t]*\\r?\\n(?:[ \\t]*\\r?\\n)*[ \\t]*([\\s\\S]*?)(?:\\r?\\n\\r?\\n[ \\t]*Gesendet[ \\t]+von|\\r?\\n\\r?\\n\\s*$|$)",
+                "pattern": "Fasnachtstage[ \\t]*\\r?\\n(?:[ \\t]*\\r?\\n)*[ \\t]*([\\s\\S]*?)\\r?\\n(?:[ \\t]*\\r?\\n)+[ \\t]*Vereinsart[^\\r\\n]*\\r?\\n[\\s\\S]*?Vereinsname[ \\t]*\\r?\\n(?:[ \\t]*\\r?\\n)*[ \\t]*(.*?)[ \\t]*\\r?\\n[\\s\\S]*?Zus.{1,2}tzlich gew.{1,2}nschte Auftritte[^\\r\\n]*\\r?\\n(?:[ \\t]*\\r?\\n)*[ \\t]*(.*?)[ \\t]*\\r?\\n[\\s\\S]*?Anzahl[ \\t]+Mitglieder[ \\t]*\\r?\\n(?:[ \\t]*\\r?\\n)*[ \\t]*(.*?)[ \\t]*\\r?\\n[\\s\\S]*?geplante[ \\t]+Anreisezeit[ \\t]*\\r?\\n(?:[ \\t]*\\r?\\n)*[ \\t]*(.*?)[ \\t]*\\r?\\n[\\s\\S]*?geplante[ \\t]+Abreisezeit[ \\t]*\\r?\\n(?:[ \\t]*\\r?\\n)*[ \\t]*(.*?)[ \\t]*\\r?\\n[\\s\\S]*?Carparkplatz[ \\t]+ben.{1,2}tigt[ \\t]*\\r?\\n(?:[ \\t]*\\r?\\n)*[ \\t]*(.*?)[ \\t]*\\r?\\n[\\s\\S]*?Instrumentenanh.{1,2}ngerplatz[ \\t]+ben.{1,2}tigt[ \\t]*\\r?\\n(?:[ \\t]*\\r?\\n)*[ \\t]*(.*?)[ \\t]*\\r?\\n[\\s\\S]*?Znachtessen erw.{1,2}nscht[^\\r\\n]*\\r?\\n(?:[ \\t]*\\r?\\n)*[ \\t]*(.*?)[ \\t]*\\r?\\n[\\s\\S]*?Pr.{1,2}sident[ \\t]*\\r?\\n(?:[ \\t]*\\r?\\n)*[ \\t]*(.*?)[ \\t]*\\r?\\n[\\s\\S]*?Email[ \\t]*\\r?\\n(?:[ \\t]*\\r?\\n)*[ \\t]*(.*?)[ \\t]*\\r?\\n[\\s\\S]*?Natel-Nummer[ \\t]*\\r?\\n(?:[ \\t]*\\r?\\n)*[ \\t]*(.*?)[ \\t]*\\r?\\n[\\s\\S]*?Auftrittchef[^\\r\\n]*\\r?\\n(?:[ \\t]*\\r?\\n)*[ \\t]*(.*?)[ \\t]*\\r?\\n[\\s\\S]*?Natel-Nummer[ \\t]+\\(Auftritt\\)[ \\t]*\\r?\\n(?:[ \\t]*\\r?\\n)*[ \\t]*(.*?)[ \\t]*\\r?\\n[\\s\\S]*?E-Mail[ \\t]*\\r?\\n(?:[ \\t]*\\r?\\n)*[ \\t]*(.*?)[ \\t]*\\r?\\n[\\s\\S]*?Bemerkungen[ \\t]*\\r?\\n(?:[ \\t]*\\r?\\n)*[ \\t]*([\\s\\S]*?)(?:\\r?\\n\\r?\\n[ \\t]*Gesendet[ \\t]+von|\\r?\\n\\r?\\n\\s*$|$)",
                 "multiline": false,
                 "sensitive": true,
                 "singleline": false,
@@ -181,7 +181,8 @@
                     {"name": "$12", "type": "text", "label": "$12"},
                     {"name": "$13", "type": "text", "label": "$13"},
                     {"name": "$14", "type": "text", "label": "$14"},
-                    {"name": "$15", "type": "text", "label": "$15"}
+                    {"name": "$15", "type": "text", "label": "$15"},
+                    {"name": "$16", "type": "text", "label": "$16"}
                 ]
             }
         },
@@ -195,22 +196,23 @@
             "mapper": {
                 "path": "/pendingRegistrations",
                 "fields": [
-                    {"fieldName": "vereinsname",     "valueType": "stringValue", "value": "{{3.$1}}"},
-                    {"fieldName": "auftritte",        "valueType": "stringValue", "value": "{{3.$2}}"},
-                    {"fieldName": "mitglieder",       "valueType": "stringValue", "value": "{{3.$3}}"},
-                    {"fieldName": "anreise",          "valueType": "stringValue", "value": "{{3.$4}}"},
-                    {"fieldName": "abreise",          "valueType": "stringValue", "value": "{{3.$5}}"},
-                    {"fieldName": "carpark",          "valueType": "stringValue", "value": "{{3.$6}}"},
-                    {"fieldName": "anhaenger",        "valueType": "stringValue", "value": "{{3.$7}}"},
-                    {"fieldName": "znacht",           "valueType": "stringValue", "value": "{{3.$8}}"},
-                    {"fieldName": "praesidentName",   "valueType": "stringValue", "value": "{{3.$9}}"},
-                    {"fieldName": "praesidentEmail",  "valueType": "stringValue", "value": "{{3.$10}}"},
-                    {"fieldName": "praesidentTel",    "valueType": "stringValue", "value": "{{3.$11}}"},
-                    {"fieldName": "tourName",         "valueType": "stringValue", "value": "{{3.$12}}"},
-                    {"fieldName": "tourTel",          "valueType": "stringValue", "value": "{{3.$13}}"},
-                    {"fieldName": "tourEmail",        "valueType": "stringValue", "value": "{{3.$14}}"},
-                    {"fieldName": "bemerkungen",      "valueType": "stringValue", "value": "{{3.$15}}"},
-                    {"fieldName": "status",           "valueType": "stringValue", "value": "pending"}
+                    {"fieldName": "fasnachtstage",     "valueType": "stringValue", "value": "{{3.$1}}"},
+                    {"fieldName": "vereinsname",       "valueType": "stringValue", "value": "{{3.$2}}"},
+                    {"fieldName": "auftritte",         "valueType": "stringValue", "value": "{{3.$3}}"},
+                    {"fieldName": "mitglieder",        "valueType": "stringValue", "value": "{{3.$4}}"},
+                    {"fieldName": "anreise",           "valueType": "stringValue", "value": "{{3.$5}}"},
+                    {"fieldName": "abreise",           "valueType": "stringValue", "value": "{{3.$6}}"},
+                    {"fieldName": "carpark",           "valueType": "stringValue", "value": "{{3.$7}}"},
+                    {"fieldName": "anhaenger",         "valueType": "stringValue", "value": "{{3.$8}}"},
+                    {"fieldName": "znacht",            "valueType": "stringValue", "value": "{{3.$9}}"},
+                    {"fieldName": "praesidentName",    "valueType": "stringValue", "value": "{{3.$10}}"},
+                    {"fieldName": "praesidentEmail",   "valueType": "stringValue", "value": "{{3.$11}}"},
+                    {"fieldName": "praesidentTel",     "valueType": "stringValue", "value": "{{3.$12}}"},
+                    {"fieldName": "tourName",          "valueType": "stringValue", "value": "{{3.$13}}"},
+                    {"fieldName": "tourTel",           "valueType": "stringValue", "value": "{{3.$14}}"},
+                    {"fieldName": "tourEmail",         "valueType": "stringValue", "value": "{{3.$15}}"},
+                    {"fieldName": "bemerkungen",       "valueType": "stringValue", "value": "{{3.$16}}"},
+                    {"fieldName": "status",            "valueType": "stringValue", "value": "pending"}
                 ],
                 "input_type": "select",
                 "project_id": "fasnacht-hofdere"
@@ -331,7 +333,7 @@
                 "shareCookies": false,
                 "parseResponse": true,
                 "allowRedirects": true,
-                "rawBodyContent": "{{3.$1}} hat sich angemeldet",
+                "rawBodyContent": "{{3.$2}} hat sich angemeldet",
                 "stopOnHttpError": true,
                 "contentTypeValue": "text/plain",
                 "requestCompressedContent": true
