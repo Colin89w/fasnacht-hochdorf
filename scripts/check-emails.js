@@ -57,9 +57,9 @@ function hashMessageId(id){
   return crypto.createHash("sha256").update(id).digest("hex");
 }
 
-async function alreadyProcessed(hash){
+async function getProcessed(hash){
   const doc = await db.collection("processedEmails").doc(hash).get();
-  return doc.exists;
+  return doc.exists ? doc.data() : null;
 }
 
 async function markProcessed(hash, meta){
@@ -123,6 +123,10 @@ async function main(){
       searchCriteria.since = sinceDate;
 
       const uids = await client.search(searchCriteria, { uid: true });
+      console.log(`Suche ab ${sinceDate.toISOString()}, Betreff-Filter "${EMAIL_SUBJECT_FILTER}", Ordner "${IMAP_FOLDER}": ${uids.length} Mail(s) gefunden.`);
+
+      let alreadyDone = 0;
+      const unrecognized = [];
 
       for(const uid of uids){
         const msg = await client.fetchOne(uid, { source: true, envelope: true }, { uid: true });
@@ -133,7 +137,12 @@ async function main(){
           || ((msg.envelope?.date || "") + "-" + (msg.envelope?.subject || "") + "-" + uid);
         const hash = hashMessageId(messageId);
 
-        if(await alreadyProcessed(hash)) continue;
+        const existing = await getProcessed(hash);
+        if(existing){
+          alreadyDone++;
+          if(existing.skipped) unrecognized.push({ subject: existing.subject || "", uid, date: parsedMail.date, previously: true });
+          continue;
+        }
 
         const bodyText = (parsedMail.text || "").normalize("NFC");
         const fields = parseFormFields(bodyText);
@@ -143,6 +152,7 @@ async function main(){
           // Rückfrage-Antwort im selben Mail-Thread) - nichts anlegen,
           // aber als geprüft markieren, damit es nicht jedes Mal erneut
           // ausgewertet wird.
+          unrecognized.push({ subject: parsedMail.subject || "", uid, date: parsedMail.date });
           await markProcessed(hash, { subject: parsedMail.subject || "", skipped: true });
           continue;
         }
@@ -151,6 +161,12 @@ async function main(){
         await createPendingRegistration(fields, { date: parsedMail.date, subject: parsedMail.subject });
         await markProcessed(hash, { subject: parsedMail.subject || "", skipped: false });
         newEntries.push({ vereinsname: fields.vereinsname, vereinsart: fields.vereinsart, incomplete });
+      }
+
+      console.log(`Davon bereits zuvor verarbeitet: ${alreadyDone}.`);
+      if(unrecognized.length){
+        console.log(`Nicht als Anmeldung erkannt (0 Felder gefunden), daher übersprungen: ${unrecognized.length}.`);
+        unrecognized.forEach(u => console.log(`  - UID ${u.uid}${u.previously ? " (bereits in früherem Lauf übersprungen)" : ""}, Betreff: "${u.subject}", Datum: ${u.date || "?"}`));
       }
     } finally {
       lock.release();
