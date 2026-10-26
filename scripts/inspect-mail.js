@@ -37,6 +37,19 @@ function extractFieldNamePositions(html){
   return labels;
 }
 
+// Exakt die gleiche Regex wie in check-emails.js (inkl. Wert-Gruppe) - zeigt
+// Label + Wert-LÄNGE (nie den Wert selbst), um zu sehen, ob/wo die
+// Wert-Erfassung abweicht von der reinen Label-Erkennung oben.
+function extractFieldNameValuePairsDiag(html){
+  const re = /<td[^>]*class="field-name"[^>]*>([\s\S]*?)<\/td>\s*<\/tr>\s*<tr[^>]*>\s*<td[^>]*class="field-value"[^>]*>([\s\S]*?)<\/td>/gi;
+  const pairs = [];
+  let m;
+  while((m = re.exec(html))){
+    pairs.push([m[1].replace(/<[^>]+>/g, "").trim(), m[2].length]);
+  }
+  return pairs;
+}
+
 async function main(){
   const client = new ImapFlow({
     host: IMAP_HOST,
@@ -56,6 +69,8 @@ async function main(){
       console.log(`HTML-Länge: ${html.length}`);
       const labels = extractFieldNamePositions(html);
       console.log(`Gefundene field-name-Labels (${labels.length}):`, JSON.stringify(labels));
+      const pairs = extractFieldNameValuePairsDiag(html);
+      console.log(`Gefundene Label/Wert-Paare (${pairs.length}):`, JSON.stringify(pairs));
       console.log("Sicheres Skelett (Text + Attributwerte entfernt):");
       console.log(safeSkeleton(html));
     } finally {
