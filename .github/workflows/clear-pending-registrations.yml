@@ -1,0 +1,21 @@
+name: pendingRegistrations leeren (einmalig)
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  clear-pending-registrations:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - run: npm ci
+
+      - run: node scripts/clear-pending-registrations.js
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
