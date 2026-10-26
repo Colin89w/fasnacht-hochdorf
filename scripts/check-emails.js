@@ -19,7 +19,31 @@ import { convert as htmlToText } from "html-to-text";
 import { initializeApp, cert } from "firebase-admin/app";
 import { getFirestore, FieldValue, Timestamp } from "firebase-admin/firestore";
 import crypto from "node:crypto";
-import { parseFormFields, EMAIL_IMPORT_LABELS } from "../email-parser.js";
+import { parseFormFields, fieldsFromLabelValuePairs, EMAIL_IMPORT_LABELS } from "../email-parser.js";
+
+const HTML_ENTITIES = { amp: "&", lt: "<", gt: ">", quot: '"', "#39": "'", nbsp: " " };
+function stripHtmlFragment(fragment){
+  return fragment
+    .replace(/<br[^>]*>/gi, "\n")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&(amp|lt|gt|quot|#39|nbsp);/g, (m, e) => HTML_ENTITIES[e]);
+}
+
+// Manche Formular-Builder-Benachrichtigungsmails liefern im HTML-Teil ein
+// sehr klares, wiederholtes Muster: ein "field-name"-Zellen-Paar (Label in
+// <strong>) direkt gefolgt von der "field-value"-Zelle (Wert) - siehe
+// Diagnose der "Anmeldung «Sound»"-Mails. Das ist deutlich robuster zu lesen
+// als generisches HTML-zu-Text, weil die Label/Wert-Zuordnung nie vom
+// Zeilenumbruch-Verhalten des Absender-Systems abhängt.
+function extractFieldNameValuePairs(html){
+  const pairs = [];
+  const re = /<td[^>]*class="field-name"[^>]*>([\s\S]*?)<\/td>\s*<\/tr>\s*<tr[^>]*>\s*<td[^>]*class="field-value"[^>]*>([\s\S]*?)<\/td>/gi;
+  let m;
+  while((m = re.exec(html))){
+    pairs.push([stripHtmlFragment(m[1]), stripHtmlFragment(m[2])]);
+  }
+  return pairs;
+}
 
 // Nur für Debugging: entfernt aus HTML jeglichen Text zwischen Tags, lässt
 // aber die Tag-Struktur (Elemente/Klassen) stehen - zeigt den Aufbau des
@@ -188,14 +212,27 @@ async function main(){
         let htmlDiag = null;
 
         if(Object.keys(fields).length === 0 && parsedMail.html){
-          // Manche Absender-Systeme liefern einen schlecht umgebrochenen
-          // Text-Teil (z.B. durchgehend bei ~76 Zeichen umgebrochener
-          // Fliesstext, der die Label/Wert-Zeilenstruktur zerstört - sichtbar
-          // an vielen gleich langen Zeilen quer durch den ganzen Text, ohne
-          // Bezug zum Inhalt). Der HTML-Teil bildet dasselbe Formular meist
-          // weiterhin ein Feld pro Absatz ab -> daraus als Fallback Text
-          // gewinnen (wordwrap:false, damit kein Label mitten im Wort
-          // zerschnitten wird).
+          // 1. Versuch: gezielte Extraktion aus dem Formular-Builder-Muster
+          // "field-name"/"field-value"-Zellenpaare (siehe Diagnose der
+          // "Anmeldung «Sound»"-Mails) - robuster als generisches HTML-zu-
+          // Text, weil die Label/Wert-Zuordnung direkt aus der Tabellen-
+          // Struktur kommt statt aus Zeilenumbrüchen.
+          const pairFields = fieldsFromLabelValuePairs(extractFieldNameValuePairs(parsedMail.html));
+          if(Object.keys(pairFields).length > 0){
+            fields = pairFields;
+          }
+        }
+
+        if(Object.keys(fields).length === 0 && parsedMail.html){
+          // 2. Versuch (generischer Fallback): manche Absender-Systeme
+          // liefern einen schlecht umgebrochenen Text-Teil (z.B.
+          // durchgehend bei ~76 Zeichen umgebrochener Fliesstext, der die
+          // Label/Wert-Zeilenstruktur zerstört - sichtbar an vielen gleich
+          // langen Zeilen quer durch den ganzen Text, ohne Bezug zum
+          // Inhalt). Der HTML-Teil bildet dasselbe Formular oft weiterhin
+          // ein Feld pro Absatz ab -> daraus als Fallback Text gewinnen
+          // (wordwrap:false, damit kein Label mitten im Wort zerschnitten
+          // wird).
           const htmlText = htmlToText(parsedMail.html, { wordwrap: false }).normalize("NFC");
           const htmlFields = parseFormFields(htmlText);
           if(Object.keys(htmlFields).length > 0){
