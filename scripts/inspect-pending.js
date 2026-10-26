@@ -23,8 +23,8 @@ async function main(){
   let matches = 0;
   snap.forEach(doc => {
     const data = doc.data();
-    const name = (data.vereinsname || "").toLowerCase();
-    if(filter && !name.includes(filter)) return;
+    const haystack = JSON.stringify(data).toLowerCase();
+    if(filter && !haystack.includes(filter)) return;
     matches++;
     console.log(`--- Dokument ${doc.id} ---`);
     console.log(JSON.stringify(data, null, 2));
