@@ -1,0 +1,29 @@
+name: Einzelne Mail inspizieren (einmalig)
+
+on:
+  workflow_dispatch:
+    inputs:
+      uid:
+        description: 'IMAP-UID der zu untersuchenden Mail'
+        required: true
+
+jobs:
+  inspect-mail:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - run: npm ci
+
+      - run: node scripts/inspect-mail.js
+        env:
+          IMAP_HOST: ${{ secrets.IMAP_HOST }}
+          IMAP_PORT: ${{ secrets.IMAP_PORT }}
+          IMAP_USER: ${{ secrets.IMAP_USER }}
+          IMAP_PASSWORD: ${{ secrets.IMAP_PASSWORD }}
+          IMAP_FOLDER: ${{ secrets.IMAP_FOLDER }}
+          INSPECT_UID: ${{ inputs.uid }}
