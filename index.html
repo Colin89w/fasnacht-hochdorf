@@ -704,7 +704,7 @@ import {
   getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut
 } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-auth.js";
 import {
-  getFirestore, doc, getDoc, setDoc, onSnapshot,
+  getFirestore, doc, getDoc, setDoc, updateDoc, onSnapshot,
   collection, query, where, deleteDoc
 } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js";
 
@@ -1528,9 +1528,24 @@ function saveGroupFromModal(){
   if(umzugEntry) umzugEntry.included = umzugIncluded;
   saveState();
   if(approvingPendingId){
-    deleteDoc(doc(db, "pendingRegistrations", approvingPendingId)).catch(e => {
-      console.error("Konnte übernommene Anmeldung nicht aus der Warteliste entfernen.", e);
-    });
+    // Eine Anmeldung, die für beide Tage gilt, bleibt nach der ersten
+    // Übernahme bestehen (nur für "currentDay" als erledigt markiert),
+    // damit sie für den zweiten Tag noch übernommen werden kann - siehe
+    // pendingTargetDays()/pendingImportedDays(). Erst wenn alle
+    // betroffenen Tage erledigt sind, wird der Eintrag ganz entfernt.
+    const reg = pendingRegistrations.find(r => r.id === approvingPendingId);
+    const targetDays = reg ? pendingTargetDays(reg) : [currentDay];
+    const doneDays = Array.from(new Set([...(reg ? pendingImportedDays(reg) : []), currentDay]));
+    const pendingRef = doc(db, "pendingRegistrations", approvingPendingId);
+    if(targetDays.every(d => doneDays.includes(d))){
+      deleteDoc(pendingRef).catch(e => {
+        console.error("Konnte übernommene Anmeldung nicht aus der Warteliste entfernen.", e);
+      });
+    } else {
+      updateDoc(pendingRef, { importedDays: doneDays }).catch(e => {
+        console.error("Konnte Anmeldung nicht als teilweise übernommen markieren.", e);
+      });
+    }
   }
   closeModal("groupModalOverlay");
   renderAll();
@@ -2403,10 +2418,47 @@ function importFromEmail(){
    NEUE ANMELDUNGEN (pendingRegistrations, z.B. via Zapier aus E-Mails)
    ====================================================================== */
 
+// Bestimmt, für welche(n) Bereich(e) ("samstag"/"dienstag"/"kleinformationen")
+// eine Anmeldung gedacht ist, anhand von Vereinsart und Fasnachtstage-Text.
+// Kleinformation geht IMMER nur nach "kleinformationen" (unabhängig vom
+// genannten Tag dort - der Kleinformationen-Bereich ist nicht nach Tag
+// aufgeteilt). Sonst: Tag-Text wird auf "samstag"/"dienstag" geprüft; wenn
+// beide (oder keiner, weil unklar) erkannt werden, gilt die Anmeldung für
+// beide Tage - sicherer als etwas zu verstecken, das vielleicht doch dazu
+// gehört.
+function pendingTargetDays(reg){
+  if(reg.vereinsart && /klein/i.test(reg.vereinsart)) return ["kleinformationen"];
+  const text = reg.fasnachtstage || "";
+  // Neben "Samstag"/"Dienstag" auch die im Formular verwendeten Hochdorfer
+  // Fasnachts-Dialektnamen erkennen (z.B. "Rüüdige Samschtig" = Samstag,
+  // "Güdis-Ziischtig" = Fasnachtsdienstag) - manche Anmeldungen nennen nur
+  // den Dialektnamen, ohne das Wort "Dienstag"/"Samstag" selbst.
+  const hasSamstag = /samstag|samschtig/i.test(text);
+  const hasDienstag = /dienstag|ziischtig|ziistig/i.test(text);
+  if(hasSamstag && !hasDienstag) return ["samstag"];
+  if(hasDienstag && !hasSamstag) return ["dienstag"];
+  return ["samstag", "dienstag"];
+}
+
+// Bereits für diese Bereiche übernommen (siehe saveGroupFromModal) - eine
+// Anmeldung für "beide Tage" bleibt nach der ersten Übernahme bestehen,
+// bis auch der zweite Tag erledigt ist.
+function pendingImportedDays(reg){
+  return Array.isArray(reg.importedDays) ? reg.importedDays : [];
+}
+
+// Nur Anmeldungen, die für den AKTUELLEN Bereich gedacht und dort noch
+// nicht übernommen sind.
+function pendingRegistrationsForCurrentDay(){
+  return pendingRegistrations.filter(r =>
+    pendingTargetDays(r).includes(currentDay) && !pendingImportedDays(r).includes(currentDay)
+  );
+}
+
 function renderPendingBadge(){
   const btn = document.getElementById("btnPendingRegistrations");
   const badge = document.getElementById("pendingBadge");
-  const n = pendingRegistrations.length;
+  const n = currentDay ? pendingRegistrationsForCurrentDay().length : 0;
   btn.style.display = n > 0 ? "" : "none";
   badge.textContent = n;
   if(document.getElementById("pendingRegistrationsModalOverlay").classList.contains("active")){
@@ -2420,15 +2472,21 @@ function pendingFieldLine(label, value){
 
 function renderPendingRegistrationsList(){
   const list = document.getElementById("pendingRegistrationsList");
-  if(!pendingRegistrations.length){
-    list.innerHTML = '<p class="hint">Keine neuen Anmeldungen.</p>';
+  const visible = pendingRegistrationsForCurrentDay();
+  if(!visible.length){
+    list.innerHTML = '<p class="hint">Keine neuen Anmeldungen für '+dayLabel(currentDay)+'.</p>';
     return;
   }
-  list.innerHTML = pendingRegistrations.map(r => {
+  list.innerHTML = visible.map(r => {
+    const targetDays = pendingTargetDays(r);
+    const importedDays = pendingImportedDays(r);
     let html = '<div class="pending-card">';
     html += "<h3 style='margin:0 0 6px;'>"+escapeHtml(r.vereinsname||"(kein Name erkannt)")+(r.vereinsart?' <span class="hint" style="font-weight:400;">('+escapeHtml(r.vereinsart)+')</span>':"")+"</h3>";
     if(r.fasnachtstage) html += '<div class="pending-hint">Tag-Hinweis aus der Mail: "'+escapeHtml(r.fasnachtstage)+'"</div>';
-    if(r.vereinsart && /klein/i.test(r.vereinsart)) html += '<div class="pending-hint">⚠️ Vereinsart "'+escapeHtml(r.vereinsart)+'" - evtl. unter "Kleinformationen" übernehmen statt Samstag/Dienstag.</div>';
+    if(targetDays.length > 1){
+      const statusText = targetDays.map(d => dayLabel(d) + (importedDays.includes(d) ? " ✅" : "")).join(", ");
+      html += '<div class="pending-hint">Gilt für beide Tage: '+statusText+'</div>';
+    }
     html += '<div class="pending-fields">';
     html += pendingFieldLine("Mitglieder", r.mitglieder);
     html += pendingFieldLine("Anreise", r.anreise);
@@ -2701,6 +2759,7 @@ function renderAll(){
   renderBattle();
   renderUmzug();
   renderLogistik();
+  renderPendingBadge();
 }
 
 function initTabs(){
