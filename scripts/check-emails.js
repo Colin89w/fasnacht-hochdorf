@@ -300,6 +300,21 @@ async function main(){
 
   await notify(newEntries);
   console.log(`Fertig: ${newEntries.length} neue Anmeldung(en) importiert.`);
+
+  // Diagnose: direkt in Firestore nachsehen, wie viele pendingRegistrations
+  // mit status "pending" aktuell wirklich existieren - um zu unterscheiden,
+  // ob Einträge fehlen (Import-Problem) oder nur im Tool nicht angezeigt
+  // werden (Sync/Anzeige-Problem). Loggt nur Zähler + Quelle, nie Vereins-
+  // name/Kontaktdaten.
+  const pendingSnap = await db.collection("pendingRegistrations").where("status", "==", "pending").get();
+  const allSnap = await db.collection("pendingRegistrations").get();
+  console.log(`Firestore-Check: ${pendingSnap.size} Dokument(e) mit status="pending", ${allSnap.size} Dokument(e) insgesamt in "pendingRegistrations".`);
+  const statusCounts = {};
+  allSnap.forEach(doc => {
+    const s = doc.data().status || "(kein status-Feld)";
+    statusCounts[s] = (statusCounts[s]||0) + 1;
+  });
+  console.log(`Status-Verteilung: ${JSON.stringify(statusCounts)}`);
 }
 
 main().catch(err => {
