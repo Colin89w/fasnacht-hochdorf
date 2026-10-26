@@ -178,6 +178,7 @@ async function main(){
 
         let bodyText = (parsedMail.text || "").normalize("NFC");
         let fields = parseFormFields(bodyText);
+        let htmlDiag = null;
 
         if(Object.keys(fields).length === 0 && parsedMail.html){
           // Manche Absender-Systeme liefern einen schlecht umgebrochenen
@@ -193,6 +194,8 @@ async function main(){
           if(Object.keys(htmlFields).length > 0){
             fields = htmlFields;
             bodyText = htmlText;
+          } else {
+            htmlDiag = diagnoseLines(htmlText);
           }
         }
 
@@ -200,7 +203,7 @@ async function main(){
           // Keine einzige erkannte Zeile (auch nicht über den HTML-Fallback)
           // -> keine Anmeldung (z.B. eine Rückfrage-Antwort im selben
           // Mail-Thread) - nichts anlegen, aber als geprüft markieren.
-          unrecognized.push({ subject: parsedMail.subject || "", uid, date: parsedMail.date, textLen, htmlLen, lineDiag: diagnoseLines(bodyText), contentType: contentTypeStr });
+          unrecognized.push({ subject: parsedMail.subject || "", uid, date: parsedMail.date, textLen, htmlLen, lineDiag: diagnoseLines(bodyText), htmlDiag, contentType: contentTypeStr });
           await markProcessed(hash, { subject: parsedMail.subject || "", skipped: true });
           continue;
         }
@@ -215,8 +218,9 @@ async function main(){
       if(unrecognized.length){
         console.log(`Nicht als Anmeldung erkannt (0 Felder gefunden), daher übersprungen: ${unrecognized.length}.`);
         unrecognized.forEach(u => {
-          console.log(`  - UID ${u.uid}${u.previously ? " (bereits in früherem Lauf übersprungen)" : ""}, Betreff: "${u.subject}", Datum: ${u.date || "?"}, Text-Länge: ${u.textLen}, HTML-Länge: ${u.htmlLen}, Content-Type: ${u.contentType}`);
-          console.log(`    Zeilen: ${u.lineDiag}`);
+          console.log(`  - UID ${u.uid}, Betreff: "${u.subject}", Datum: ${u.date || "?"}, Text-Länge: ${u.textLen}, HTML-Länge: ${u.htmlLen}, Content-Type: ${u.contentType}`);
+          console.log(`    Zeilen (Text): ${u.lineDiag}`);
+          if(u.htmlDiag) console.log(`    Zeilen (HTML-Fallback-Versuch): ${u.htmlDiag}`);
         });
       }
     } finally {
