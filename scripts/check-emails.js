@@ -15,6 +15,7 @@
 
 import { ImapFlow } from "imapflow";
 import { simpleParser } from "mailparser";
+import { convert as htmlToText } from "html-to-text";
 import { initializeApp, cert } from "firebase-admin/app";
 import { getFirestore, FieldValue, Timestamp } from "firebase-admin/firestore";
 import crypto from "node:crypto";
@@ -153,29 +154,53 @@ async function main(){
           || ((msg.envelope?.date || "") + "-" + (msg.envelope?.subject || "") + "-" + uid);
         const hash = hashMessageId(messageId);
 
+        const existing = await getProcessed(hash);
+        if(existing && !existing.skipped){
+          // Schon erfolgreich importiert - nichts tun.
+          alreadyDone++;
+          continue;
+        }
+        // existing ist entweder null (neue Mail) oder {skipped:true} (frühere
+        // Mail, die damals nicht erkannt wurde) - in beiden Fällen jetzt
+        // (erneut) versuchen zu parsen, damit ein verbesserter Parser auch
+        // rückwirkend auf zuvor übersprungene Mails wirkt.
+        if(existing) alreadyDone++;
+
         // Nur Struktur-Infos (keine Inhalte) fürs Debugging, falls eine Mail
         // nicht erkannt wird - z.B. um HTML-only-Mails (ohne Text-Teil) zu
         // identifizieren, ohne persönliche Daten zu loggen.
         const textLen = (parsedMail.text || "").length;
         const htmlLen = (parsedMail.html || "").length;
+        const contentType = parsedMail.headers?.get("content-type");
+        const contentTypeStr = contentType && typeof contentType === "object"
+          ? JSON.stringify(contentType)
+          : String(contentType || "?");
 
-        const bodyText = (parsedMail.text || "").normalize("NFC");
+        let bodyText = (parsedMail.text || "").normalize("NFC");
+        let fields = parseFormFields(bodyText);
 
-        const existing = await getProcessed(hash);
-        if(existing){
-          alreadyDone++;
-          if(existing.skipped) unrecognized.push({ subject: existing.subject || "", uid, date: parsedMail.date, previously: true, textLen, htmlLen, lineDiag: diagnoseLines(bodyText) });
-          continue;
+        if(Object.keys(fields).length === 0 && parsedMail.html){
+          // Manche Absender-Systeme liefern einen schlecht umgebrochenen
+          // Text-Teil (z.B. durchgehend bei ~76 Zeichen umgebrochener
+          // Fliesstext, der die Label/Wert-Zeilenstruktur zerstört - sichtbar
+          // an vielen gleich langen Zeilen quer durch den ganzen Text, ohne
+          // Bezug zum Inhalt). Der HTML-Teil bildet dasselbe Formular meist
+          // weiterhin ein Feld pro Absatz ab -> daraus als Fallback Text
+          // gewinnen (wordwrap:false, damit kein Label mitten im Wort
+          // zerschnitten wird).
+          const htmlText = htmlToText(parsedMail.html, { wordwrap: false }).normalize("NFC");
+          const htmlFields = parseFormFields(htmlText);
+          if(Object.keys(htmlFields).length > 0){
+            fields = htmlFields;
+            bodyText = htmlText;
+          }
         }
 
-        const fields = parseFormFields(bodyText);
-
         if(Object.keys(fields).length === 0){
-          // Keine einzige erkannte Zeile -> keine Anmeldung (z.B. eine
-          // Rückfrage-Antwort im selben Mail-Thread) - nichts anlegen,
-          // aber als geprüft markieren, damit es nicht jedes Mal erneut
-          // ausgewertet wird.
-          unrecognized.push({ subject: parsedMail.subject || "", uid, date: parsedMail.date, textLen, htmlLen, lineDiag: diagnoseLines(bodyText) });
+          // Keine einzige erkannte Zeile (auch nicht über den HTML-Fallback)
+          // -> keine Anmeldung (z.B. eine Rückfrage-Antwort im selben
+          // Mail-Thread) - nichts anlegen, aber als geprüft markieren.
+          unrecognized.push({ subject: parsedMail.subject || "", uid, date: parsedMail.date, textLen, htmlLen, lineDiag: diagnoseLines(bodyText), contentType: contentTypeStr });
           await markProcessed(hash, { subject: parsedMail.subject || "", skipped: true });
           continue;
         }
@@ -190,7 +215,7 @@ async function main(){
       if(unrecognized.length){
         console.log(`Nicht als Anmeldung erkannt (0 Felder gefunden), daher übersprungen: ${unrecognized.length}.`);
         unrecognized.forEach(u => {
-          console.log(`  - UID ${u.uid}${u.previously ? " (bereits in früherem Lauf übersprungen)" : ""}, Betreff: "${u.subject}", Datum: ${u.date || "?"}, Text-Länge: ${u.textLen}, HTML-Länge: ${u.htmlLen}`);
+          console.log(`  - UID ${u.uid}${u.previously ? " (bereits in früherem Lauf übersprungen)" : ""}, Betreff: "${u.subject}", Datum: ${u.date || "?"}, Text-Länge: ${u.textLen}, HTML-Länge: ${u.htmlLen}, Content-Type: ${u.contentType}`);
           console.log(`    Zeilen: ${u.lineDiag}`);
         });
       }
