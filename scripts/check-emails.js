@@ -137,10 +137,16 @@ async function main(){
           || ((msg.envelope?.date || "") + "-" + (msg.envelope?.subject || "") + "-" + uid);
         const hash = hashMessageId(messageId);
 
+        // Nur Struktur-Infos (keine Inhalte) fürs Debugging, falls eine Mail
+        // nicht erkannt wird - z.B. um HTML-only-Mails (ohne Text-Teil) zu
+        // identifizieren, ohne persönliche Daten zu loggen.
+        const textLen = (parsedMail.text || "").length;
+        const htmlLen = (parsedMail.html || "").length;
+
         const existing = await getProcessed(hash);
         if(existing){
           alreadyDone++;
-          if(existing.skipped) unrecognized.push({ subject: existing.subject || "", uid, date: parsedMail.date, previously: true });
+          if(existing.skipped) unrecognized.push({ subject: existing.subject || "", uid, date: parsedMail.date, previously: true, textLen, htmlLen });
           continue;
         }
 
@@ -152,7 +158,7 @@ async function main(){
           // Rückfrage-Antwort im selben Mail-Thread) - nichts anlegen,
           // aber als geprüft markieren, damit es nicht jedes Mal erneut
           // ausgewertet wird.
-          unrecognized.push({ subject: parsedMail.subject || "", uid, date: parsedMail.date });
+          unrecognized.push({ subject: parsedMail.subject || "", uid, date: parsedMail.date, textLen, htmlLen });
           await markProcessed(hash, { subject: parsedMail.subject || "", skipped: true });
           continue;
         }
@@ -166,7 +172,7 @@ async function main(){
       console.log(`Davon bereits zuvor verarbeitet: ${alreadyDone}.`);
       if(unrecognized.length){
         console.log(`Nicht als Anmeldung erkannt (0 Felder gefunden), daher übersprungen: ${unrecognized.length}.`);
-        unrecognized.forEach(u => console.log(`  - UID ${u.uid}${u.previously ? " (bereits in früherem Lauf übersprungen)" : ""}, Betreff: "${u.subject}", Datum: ${u.date || "?"}`));
+        unrecognized.forEach(u => console.log(`  - UID ${u.uid}${u.previously ? " (bereits in früherem Lauf übersprungen)" : ""}, Betreff: "${u.subject}", Datum: ${u.date || "?"}, Text-Länge: ${u.textLen}, HTML-Länge: ${u.htmlLen}`));
       }
     } finally {
       lock.release();
