@@ -1,0 +1,13 @@
+{
+  "name": "fasnacht-hochdorf-email-import",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check-emails": "node scripts/check-emails.js"
+  },
+  "dependencies": {
+    "firebase-admin": "^14.5.0",
+    "imapflow": "^2.9.1",
+    "mailparser": "^3.12.4"
+  }
+}
