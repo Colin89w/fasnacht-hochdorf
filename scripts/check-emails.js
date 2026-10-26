@@ -20,19 +20,23 @@ import { getFirestore, FieldValue, Timestamp } from "firebase-admin/firestore";
 import crypto from "node:crypto";
 import { parseFormFields } from "../email-parser.js";
 
+// Nicht per Destructuring-Default ("= wert"), weil GitHub Actions bei einem
+// nicht gesetzten Secret einen LEEREN String setzt (nicht undefined) - ein
+// Destructuring-Default greift nur bei undefined, nicht bei "". Mit "||"
+// schlägt der Fallback auch bei einem leeren String zu.
 const {
   IMAP_HOST,
-  IMAP_PORT = "993",
   IMAP_USER,
   IMAP_PASSWORD,
-  IMAP_FOLDER = "INBOX",
-  EMAIL_SUBJECT_FILTER = "Anmeldung",
   EMAIL_SINCE_DATE,
-  FIREBASE_SERVICE_ACCOUNT,
-  FIREBASE_PROJECT_ID = "fasnacht-hofdere",
-  NTFY_URL = "https://ntfy.sh/hofdere-anmeldung-x7k2",
-  APP_URL = "https://colin89w.github.io/fasnacht-hochdorf/"
+  FIREBASE_SERVICE_ACCOUNT
 } = process.env;
+const IMAP_PORT = process.env.IMAP_PORT || "993";
+const IMAP_FOLDER = process.env.IMAP_FOLDER || "INBOX";
+const EMAIL_SUBJECT_FILTER = process.env.EMAIL_SUBJECT_FILTER || "Anmeldung";
+const FIREBASE_PROJECT_ID = process.env.FIREBASE_PROJECT_ID || "fasnacht-hofdere";
+const NTFY_URL = process.env.NTFY_URL || "https://ntfy.sh/hofdere-anmeldung-x7k2";
+const APP_URL = process.env.APP_URL || "https://colin89w.github.io/fasnacht-hochdorf/";
 
 function requireEnv(name, value){
   if(!value) throw new Error(`Fehlende Umgebungsvariable: ${name}`);
