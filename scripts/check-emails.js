@@ -175,6 +175,12 @@ async function main(){
 
       let alreadyDone = 0;
       const unrecognized = [];
+      // Vollständiges Protokoll JEDER gefundenen Mail (UID, Datum, Betreff,
+      // Message-ID, Hash-Kurzform, Ergebnis) - NIE Vereinsname/Kontaktdaten -
+      // um z.B. Message-ID-Kollisionen (zwei verschiedene Mails, die wegen
+      // eines nicht eindeutigen Message-ID-Headers fälschlich als "gleiche
+      // Mail" erkannt und daher übersprungen werden) aufzudecken.
+      const summary = [];
 
       for(const uid of uids){
         const msg = await client.fetchOne(uid, { source: true, envelope: true }, { uid: true });
@@ -184,11 +190,13 @@ async function main(){
         const messageId = parsedMail.messageId
           || ((msg.envelope?.date || "") + "-" + (msg.envelope?.subject || "") + "-" + uid);
         const hash = hashMessageId(messageId);
+        const hashShort = hash.slice(0, 12);
 
         const existing = await getProcessed(hash);
         if(existing && !existing.skipped){
           // Schon erfolgreich importiert - nichts tun.
           alreadyDone++;
+          summary.push({ uid, date: parsedMail.date, subject: parsedMail.subject || "", messageId, hashShort, outcome: "bereits importiert (übersprungen)" });
           continue;
         }
         // existing ist entweder null (neue Mail) oder {skipped:true} (frühere
@@ -252,6 +260,7 @@ async function main(){
           // verstehen, ohne persönliche Daten offenzulegen.
           const skeleton = (parsedMail.html && unrecognized.every(u => !u.skeleton)) ? htmlSkeleton(parsedMail.html) : null;
           unrecognized.push({ subject: parsedMail.subject || "", uid, date: parsedMail.date, textLen, htmlLen, lineDiag: diagnoseLines(bodyText), htmlDiag, contentType: contentTypeStr, skeleton });
+          summary.push({ uid, date: parsedMail.date, subject: parsedMail.subject || "", messageId, hashShort, outcome: "nicht erkannt (0 Felder)" });
           await markProcessed(hash, { subject: parsedMail.subject || "", skipped: true });
           continue;
         }
@@ -260,6 +269,16 @@ async function main(){
         await createPendingRegistration(fields, { date: parsedMail.date, subject: parsedMail.subject });
         await markProcessed(hash, { subject: parsedMail.subject || "", skipped: false });
         newEntries.push({ vereinsname: fields.vereinsname, vereinsart: fields.vereinsart, incomplete });
+        summary.push({ uid, date: parsedMail.date, subject: parsedMail.subject || "", messageId, hashShort, outcome: "importiert" });
+      }
+
+      console.log("Protokoll aller gefundenen Mails (keine Inhalte):");
+      summary.forEach(s => console.log(`  - UID ${s.uid}, Datum: ${s.date || "?"}, Betreff: "${s.subject}", Message-ID: ${s.messageId}, Hash: ${s.hashShort}, Ergebnis: ${s.outcome}`));
+      const hashCounts = {};
+      summary.forEach(s => { hashCounts[s.hashShort] = (hashCounts[s.hashShort]||0) + 1; });
+      const collisions = Object.entries(hashCounts).filter(([,n]) => n > 1).map(([h]) => h);
+      if(collisions.length){
+        console.log(`WARNUNG: ${collisions.length} Hash-Kollision(en) gefunden (mehrere Mails mit identischer Message-ID/Hash) - betroffene Hashes: ${collisions.join(", ")}`);
       }
 
       console.log(`Davon bereits zuvor verarbeitet: ${alreadyDone}.`);
