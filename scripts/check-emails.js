@@ -215,41 +215,50 @@ async function main(){
           ? JSON.stringify(contentType)
           : String(contentType || "?");
 
-        let bodyText = (parsedMail.text || "").normalize("NFC");
-        let fields = parseFormFields(bodyText);
-        let htmlDiag = null;
+        // Drei Parse-Versuche, danach wird der mit den MEISTEN erkannten
+        // Feldern verwendet (bei Gleichstand gewinnt der erstgenannte,
+        // vertrauenswürdigere) - NIE nur "falls 0 Felder, probier das
+        // nächste", weil ein stark verunglückter Text-Teil (durchgehender
+        // Fliesstext ohne Zeilenstruktur) durch Zufall genau EIN falsches
+        // Label matchen kann und damit eine "=== 0"-Bedingung verfehlt,
+        // obwohl das Ergebnis Datenmüll ist (siehe Trebiä-Mail: Text-Teil
+        // lieferte 1 falsches Feld, obwohl die HTML-Paare alle 19 richtig
+        // ergeben hätten - mit der alten "=== 0"-Logik kam der bessere
+        // HTML-Versuch nie zum Zug).
+        const textBody = (parsedMail.text || "").normalize("NFC");
+        const candidates = [{ fields: parseFormFields(textBody), bodyText: textBody }];
 
-        if(Object.keys(fields).length === 0 && parsedMail.html){
-          // 1. Versuch: gezielte Extraktion aus dem Formular-Builder-Muster
+        if(parsedMail.html){
+          // Gezielte Extraktion aus dem Formular-Builder-Muster
           // "field-name"/"field-value"-Zellenpaare (siehe Diagnose der
           // "Anmeldung «Sound»"-Mails) - robuster als generisches HTML-zu-
           // Text, weil die Label/Wert-Zuordnung direkt aus der Tabellen-
           // Struktur kommt statt aus Zeilenumbrüchen.
           const pairFields = fieldsFromLabelValuePairs(extractFieldNameValuePairs(parsedMail.html));
-          if(Object.keys(pairFields).length > 0){
-            fields = pairFields;
-          }
-        }
+          candidates.push({ fields: pairFields, bodyText: textBody });
 
-        if(Object.keys(fields).length === 0 && parsedMail.html){
-          // 2. Versuch (generischer Fallback): manche Absender-Systeme
-          // liefern einen schlecht umgebrochenen Text-Teil (z.B.
-          // durchgehend bei ~76 Zeichen umgebrochener Fliesstext, der die
-          // Label/Wert-Zeilenstruktur zerstört - sichtbar an vielen gleich
-          // langen Zeilen quer durch den ganzen Text, ohne Bezug zum
-          // Inhalt). Der HTML-Teil bildet dasselbe Formular oft weiterhin
-          // ein Feld pro Absatz ab -> daraus als Fallback Text gewinnen
+          // Generischer Fallback: manche Absender-Systeme liefern einen
+          // schlecht umgebrochenen Text-Teil (z.B. durchgehend bei ~76
+          // Zeichen umgebrochener Fliesstext, der die Label/Wert-
+          // Zeilenstruktur zerstört - sichtbar an vielen gleich langen
+          // Zeilen quer durch den ganzen Text, ohne Bezug zum Inhalt). Der
+          // HTML-Teil bildet dasselbe Formular oft weiterhin ein Feld pro
+          // Absatz ab -> daraus als letzter Versuch Text gewinnen
           // (wordwrap:false, damit kein Label mitten im Wort zerschnitten
           // wird).
           const htmlText = htmlToText(parsedMail.html, { wordwrap: false }).normalize("NFC");
-          const htmlFields = parseFormFields(htmlText);
-          if(Object.keys(htmlFields).length > 0){
-            fields = htmlFields;
-            bodyText = htmlText;
-          } else {
-            htmlDiag = diagnoseLines(htmlText);
-          }
+          candidates.push({ fields: parseFormFields(htmlText), bodyText: htmlText });
         }
+
+        let best = candidates[0];
+        for(const c of candidates){
+          if(Object.keys(c.fields).length > Object.keys(best.fields).length) best = c;
+        }
+        let fields = best.fields;
+        let bodyText = best.bodyText;
+        const htmlDiag = (Object.keys(fields).length === 0 && candidates.length > 1)
+          ? diagnoseLines(candidates[candidates.length - 1].bodyText)
+          : null;
 
         if(Object.keys(fields).length === 0){
           // Keine einzige erkannte Zeile (auch nicht über den HTML-Fallback)

@@ -69,20 +69,25 @@ function extractFieldNameValuePairs(html){
   return pairs;
 }
 
-// Gleiche Fallback-Kette wie check-emails.js: Text -> field-name/field-value-
-// Paare aus HTML -> generisches HTML-zu-Text.
+// Gleiche Fallback-Kette wie check-emails.js: Text, field-name/field-value-
+// Paare aus HTML und generisches HTML-zu-Text werden ALLE versucht, dann
+// gewinnt das Ergebnis mit den meisten erkannten Feldern (nicht nur "falls
+// 0, probier weiter" - ein verunglückter Text-Teil kann durch Zufall ein
+// einzelnes falsches Feld matchen und so einen besseren Fallback verhindern).
 function extractFields(parsedMail){
-  const bodyText = (parsedMail.text || "").normalize("NFC");
-  let fields = parseFormFields(bodyText);
-  if(Object.keys(fields).length === 0 && parsedMail.html){
+  const textBody = (parsedMail.text || "").normalize("NFC");
+  const candidates = [{ fields: parseFormFields(textBody), bodyText: textBody }];
+  if(parsedMail.html){
     const pairFields = fieldsFromLabelValuePairs(extractFieldNameValuePairs(parsedMail.html));
-    if(Object.keys(pairFields).length > 0) fields = pairFields;
-  }
-  if(Object.keys(fields).length === 0 && parsedMail.html){
+    candidates.push({ fields: pairFields, bodyText: textBody });
     const htmlText = htmlToText(parsedMail.html, { wordwrap: false }).normalize("NFC");
-    const htmlFields = parseFormFields(htmlText);
-    if(Object.keys(htmlFields).length > 0) fields = htmlFields;
+    candidates.push({ fields: parseFormFields(htmlText), bodyText: htmlText });
   }
+  let best = candidates[0];
+  for(const c of candidates){
+    if(Object.keys(c.fields).length > Object.keys(best.fields).length) best = c;
+  }
+  const fields = best.fields;
   return fields;
 }
 
