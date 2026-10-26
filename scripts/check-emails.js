@@ -21,6 +21,13 @@ import { getFirestore, FieldValue, Timestamp } from "firebase-admin/firestore";
 import crypto from "node:crypto";
 import { parseFormFields, EMAIL_IMPORT_LABELS } from "../email-parser.js";
 
+// Nur für Debugging: entfernt aus HTML jeglichen Text zwischen Tags, lässt
+// aber die Tag-Struktur (Elemente/Klassen) stehen - zeigt den Aufbau des
+// Mail-Templates, ohne jemals Inhalte/persönliche Daten zu loggen.
+function htmlSkeleton(html){
+  return html.replace(/>([^<]*)</g, (m, inner) => inner.trim() ? ">…<" : "><");
+}
+
 // Nur für Debugging bei nicht erkannten Mails: zeigt pro Zeile nur Länge und
 // ob/welches Label (fast) gematcht hätte - NIE den eigentlichen Inhalt, damit
 // keine persönlichen Daten in den Action-Logs landen.
@@ -203,7 +210,11 @@ async function main(){
           // Keine einzige erkannte Zeile (auch nicht über den HTML-Fallback)
           // -> keine Anmeldung (z.B. eine Rückfrage-Antwort im selben
           // Mail-Thread) - nichts anlegen, aber als geprüft markieren.
-          unrecognized.push({ subject: parsedMail.subject || "", uid, date: parsedMail.date, textLen, htmlLen, lineDiag: diagnoseLines(bodyText), htmlDiag, contentType: contentTypeStr });
+          // Fürs Debugging einmalig (erste betroffene Mail) das HTML-Skelett
+          // (Tag-Struktur ohne Textinhalte) loggen, um den Mail-Aufbau zu
+          // verstehen, ohne persönliche Daten offenzulegen.
+          const skeleton = (parsedMail.html && unrecognized.every(u => !u.skeleton)) ? htmlSkeleton(parsedMail.html) : null;
+          unrecognized.push({ subject: parsedMail.subject || "", uid, date: parsedMail.date, textLen, htmlLen, lineDiag: diagnoseLines(bodyText), htmlDiag, contentType: contentTypeStr, skeleton });
           await markProcessed(hash, { subject: parsedMail.subject || "", skipped: true });
           continue;
         }
@@ -221,6 +232,7 @@ async function main(){
           console.log(`  - UID ${u.uid}, Betreff: "${u.subject}", Datum: ${u.date || "?"}, Text-Länge: ${u.textLen}, HTML-Länge: ${u.htmlLen}, Content-Type: ${u.contentType}`);
           console.log(`    Zeilen (Text): ${u.lineDiag}`);
           if(u.htmlDiag) console.log(`    Zeilen (HTML-Fallback-Versuch): ${u.htmlDiag}`);
+          if(u.skeleton) console.log(`    HTML-Skelett (ohne Textinhalte): ${u.skeleton}`);
         });
       }
     } finally {
