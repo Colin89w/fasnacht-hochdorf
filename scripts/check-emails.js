@@ -18,7 +18,23 @@ import { simpleParser } from "mailparser";
 import { initializeApp, cert } from "firebase-admin/app";
 import { getFirestore, FieldValue, Timestamp } from "firebase-admin/firestore";
 import crypto from "node:crypto";
-import { parseFormFields } from "../email-parser.js";
+import { parseFormFields, EMAIL_IMPORT_LABELS } from "../email-parser.js";
+
+// Nur für Debugging bei nicht erkannten Mails: zeigt pro Zeile nur Länge und
+// ob/welches Label (fast) gematcht hätte - NIE den eigentlichen Inhalt, damit
+// keine persönlichen Daten in den Action-Logs landen.
+function diagnoseLines(text){
+  const lines = text.split(/\r?\n/).map(l => l.trim().normalize("NFC"));
+  return lines.map((line, i) => {
+    if(!line) return `#${i} (leer)`;
+    let matched = null;
+    for(const [label, , isPrefix] of EMAIL_IMPORT_LABELS){
+      const normLabel = label.normalize("NFC");
+      if(isPrefix ? line.startsWith(normLabel) : line === normLabel){ matched = label; break; }
+    }
+    return `#${i} len=${line.length}${matched ? " MATCH:\""+matched+"\"" : ""}`;
+  }).join(" | ");
+}
 
 // Nicht per Destructuring-Default ("= wert"), weil GitHub Actions bei einem
 // nicht gesetzten Secret einen LEEREN String setzt (nicht undefined) - ein
@@ -143,14 +159,15 @@ async function main(){
         const textLen = (parsedMail.text || "").length;
         const htmlLen = (parsedMail.html || "").length;
 
+        const bodyText = (parsedMail.text || "").normalize("NFC");
+
         const existing = await getProcessed(hash);
         if(existing){
           alreadyDone++;
-          if(existing.skipped) unrecognized.push({ subject: existing.subject || "", uid, date: parsedMail.date, previously: true, textLen, htmlLen });
+          if(existing.skipped) unrecognized.push({ subject: existing.subject || "", uid, date: parsedMail.date, previously: true, textLen, htmlLen, lineDiag: diagnoseLines(bodyText) });
           continue;
         }
 
-        const bodyText = (parsedMail.text || "").normalize("NFC");
         const fields = parseFormFields(bodyText);
 
         if(Object.keys(fields).length === 0){
@@ -158,7 +175,7 @@ async function main(){
           // Rückfrage-Antwort im selben Mail-Thread) - nichts anlegen,
           // aber als geprüft markieren, damit es nicht jedes Mal erneut
           // ausgewertet wird.
-          unrecognized.push({ subject: parsedMail.subject || "", uid, date: parsedMail.date, textLen, htmlLen });
+          unrecognized.push({ subject: parsedMail.subject || "", uid, date: parsedMail.date, textLen, htmlLen, lineDiag: diagnoseLines(bodyText) });
           await markProcessed(hash, { subject: parsedMail.subject || "", skipped: true });
           continue;
         }
@@ -172,7 +189,10 @@ async function main(){
       console.log(`Davon bereits zuvor verarbeitet: ${alreadyDone}.`);
       if(unrecognized.length){
         console.log(`Nicht als Anmeldung erkannt (0 Felder gefunden), daher übersprungen: ${unrecognized.length}.`);
-        unrecognized.forEach(u => console.log(`  - UID ${u.uid}${u.previously ? " (bereits in früherem Lauf übersprungen)" : ""}, Betreff: "${u.subject}", Datum: ${u.date || "?"}, Text-Länge: ${u.textLen}, HTML-Länge: ${u.htmlLen}`));
+        unrecognized.forEach(u => {
+          console.log(`  - UID ${u.uid}${u.previously ? " (bereits in früherem Lauf übersprungen)" : ""}, Betreff: "${u.subject}", Datum: ${u.date || "?"}, Text-Länge: ${u.textLen}, HTML-Länge: ${u.htmlLen}`);
+          console.log(`    Zeilen: ${u.lineDiag}`);
+        });
       }
     } finally {
       lock.release();
