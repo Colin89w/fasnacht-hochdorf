@@ -1,0 +1,27 @@
+name: Anmeldungen inspizieren (einmalig)
+
+on:
+  workflow_dispatch:
+    inputs:
+      filter:
+        description: 'Vereinsname-Teilstring zum Anzeigen (leer = alle).'
+        required: false
+        default: ''
+
+jobs:
+  inspect-pending:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - run: npm ci
+
+      - run: node scripts/inspect-pending.js
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
+          INSPECT_FILTER: ${{ inputs.filter }}
