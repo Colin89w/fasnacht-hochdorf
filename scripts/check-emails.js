@@ -15,7 +15,8 @@
 
 import { ImapFlow } from "imapflow";
 import { simpleParser } from "mailparser";
-import admin from "firebase-admin";
+import { initializeApp, cert } from "firebase-admin/app";
+import { getFirestore, FieldValue, Timestamp } from "firebase-admin/firestore";
 import crypto from "node:crypto";
 import { parseFormFields } from "../email-parser.js";
 
@@ -42,11 +43,11 @@ requireEnv("IMAP_USER", IMAP_USER);
 requireEnv("IMAP_PASSWORD", IMAP_PASSWORD);
 requireEnv("FIREBASE_SERVICE_ACCOUNT", FIREBASE_SERVICE_ACCOUNT);
 
-admin.initializeApp({
-  credential: admin.credential.cert(JSON.parse(FIREBASE_SERVICE_ACCOUNT)),
+initializeApp({
+  credential: cert(JSON.parse(FIREBASE_SERVICE_ACCOUNT)),
   projectId: FIREBASE_PROJECT_ID
 });
-const db = admin.firestore();
+const db = getFirestore();
 
 function hashMessageId(id){
   return crypto.createHash("sha256").update(id).digest("hex");
@@ -60,7 +61,7 @@ async function alreadyProcessed(hash){
 async function markProcessed(hash, meta){
   await db.collection("processedEmails").doc(hash).set({
     ...meta,
-    processedAt: admin.firestore.FieldValue.serverTimestamp()
+    processedAt: FieldValue.serverTimestamp()
   });
 }
 
@@ -70,8 +71,8 @@ async function createPendingRegistration(fields, meta){
     status: "pending",
     source: "imap-auto-import",
     subject: meta.subject || "",
-    receivedAt: meta.date ? admin.firestore.Timestamp.fromDate(meta.date) : admin.firestore.FieldValue.serverTimestamp(),
-    importedAt: admin.firestore.FieldValue.serverTimestamp()
+    receivedAt: meta.date ? Timestamp.fromDate(meta.date) : FieldValue.serverTimestamp(),
+    importedAt: FieldValue.serverTimestamp()
   });
 }
 
