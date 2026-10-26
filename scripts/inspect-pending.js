@@ -5,7 +5,7 @@
 import { initializeApp, cert } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
 
-const { FIREBASE_SERVICE_ACCOUNT, INSPECT_FILTER } = process.env;
+const { FIREBASE_SERVICE_ACCOUNT, INSPECT_FILTER, DELETE_ID } = process.env;
 const FIREBASE_PROJECT_ID = process.env.FIREBASE_PROJECT_ID || "fasnacht-hofdere";
 
 if(!FIREBASE_SERVICE_ACCOUNT) throw new Error("Fehlende Umgebungsvariable: FIREBASE_SERVICE_ACCOUNT");
@@ -17,6 +17,11 @@ initializeApp({
 const db = getFirestore();
 
 async function main(){
+  if(DELETE_ID){
+    await db.collection("pendingRegistrations").doc(DELETE_ID).delete();
+    console.log(`Dokument ${DELETE_ID} gelöscht.`);
+    return;
+  }
   const filter = (INSPECT_FILTER || "").toLowerCase();
   const snap = await db.collection("pendingRegistrations").get();
   console.log(`${snap.size} Dokument(e) insgesamt in "pendingRegistrations".`);
