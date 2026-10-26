@@ -8,7 +8,7 @@
 export const EMAIL_IMPORT_LABELS = [
   ["Zusätzlich gewünschte Auftritte", "auftritte", true],
   ["Fasnachtstage", "fasnachtstage", false],
-  ["Vereinsart", "_ignore", false],
+  ["Vereinsart", "vereinsart", false],
   ["Vereinsname", "vereinsname", false],
   ["Anzahl Mitglieder", "mitglieder", false],
   ["geplante Anreisezeit", "anreise", false],

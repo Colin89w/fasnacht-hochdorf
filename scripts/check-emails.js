@@ -83,7 +83,7 @@ async function createPendingRegistration(fields, meta){
 async function notify(newEntries){
   if(!newEntries.length) return;
   const lines = newEntries.map(e =>
-    "• " + (e.vereinsname || "(kein Name erkannt)") + (e.incomplete ? " ⚠️ nur teilweise erkannt - bitte prüfen" : "")
+    "• " + (e.vereinsname || "(kein Name erkannt)") + (e.vereinsart ? " [" + e.vereinsart + "]" : "") + (e.incomplete ? " ⚠️ nur teilweise erkannt - bitte prüfen" : "")
   );
   const title = newEntries.length === 1 ? "Neue Anmeldung" : newEntries.length + " neue Anmeldungen";
   const body = lines.join("\n") + "\n\nJetzt prüfen: " + APP_URL;
@@ -150,7 +150,7 @@ async function main(){
         const incomplete = !fields.vereinsname || !fields.praesidentName;
         await createPendingRegistration(fields, { date: parsedMail.date, subject: parsedMail.subject });
         await markProcessed(hash, { subject: parsedMail.subject || "", skipped: false });
-        newEntries.push({ vereinsname: fields.vereinsname, incomplete });
+        newEntries.push({ vereinsname: fields.vereinsname, vereinsart: fields.vereinsart, incomplete });
       }
     } finally {
       lock.release();

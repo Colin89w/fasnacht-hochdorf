@@ -369,11 +369,12 @@ td.conflict .warn-icon{color:var(--danger);margin-right:4px;cursor:help;}
 
 <div id="dayGate" style="display:none;position:fixed;inset:0;background:var(--dark-red);align-items:center;justify-content:center;z-index:9999;">
   <div style="background:var(--cream);padding:32px 40px;border-radius:10px;box-shadow:0 8px 30px rgba(0,0,0,.4);text-align:center;">
-    <h2 style="margin:0 0 6px;color:var(--dark-red);">Welcher Tag?</h2>
-    <div style="font-size:13px;color:#665;margin-bottom:24px;">Samstag und Dienstag sind komplett getrennte Planungen.</div>
-    <div style="display:flex;gap:14px;">
+    <h2 style="margin:0 0 6px;color:var(--dark-red);">Welcher Bereich?</h2>
+    <div style="font-size:13px;color:#665;margin-bottom:24px;">Samstag, Dienstag und Kleinformationen sind komplett getrennte Planungen.</div>
+    <div style="display:flex;gap:14px;flex-wrap:wrap;justify-content:center;">
       <button class="btn btn-gold btn-big" id="btnDayGateSamstag">📅 Samstag</button>
       <button class="btn btn-gold btn-big" id="btnDayGateDienstag">📅 Dienstag</button>
+      <button class="btn btn-gold btn-big" id="btnDayGateKleinformationen">🎵 Kleinformationen</button>
     </div>
   </div>
 </div>
@@ -389,6 +390,7 @@ td.conflict .warn-icon{color:var(--danger);margin-right:4px;cursor:help;}
     <div class="day-switch" id="daySwitch">
       <button class="day-switch-btn" data-day="samstag" id="btnDaySwitchSamstag">Samstag</button>
       <button class="day-switch-btn" data-day="dienstag" id="btnDaySwitchDienstag">Dienstag</button>
+      <button class="day-switch-btn" data-day="kleinformationen" id="btnDaySwitchKleinformationen">Kleinformationen</button>
     </div>
     <div style="display:flex;gap:10px;align-items:center;">
       <button class="icon-btn" id="btnPendingRegistrations" title="Neue Anmeldungen" style="position:relative;display:none;">
@@ -754,14 +756,19 @@ function createDefaultBattles(){
   return arr;
 }
 
-// Samstag und Dienstag sind komplett unabhängige, gleich aufgebaute Tages-
-// Datensätze (eigene Gruppen, eigener Plan, eigene Standorte/Einstellungen).
-// Battle-Plan und Umzug existieren strukturell auch für Dienstag (einfacherer,
-// einheitlicher Datenaufbau), werden dort aber per UI (Tabs ausgeblendet)
-// nicht verwendet.
+// Samstag, Dienstag und Kleinformationen sind komplett unabhängige, gleich
+// aufgebaute Tages-/Bereichs-Datensätze (eigene Gruppen, eigener Plan, eigene
+// Standorte/Einstellungen). Battle-Plan und Umzug existieren strukturell auch
+// für Dienstag/Kleinformationen (einfacherer, einheitlicher Datenaufbau),
+// werden dort aber per UI (Tabs ausgeblendet) nicht verwendet - das sind
+// reine Samstag-Features (Umzug-Reihenfolge, Battle-Turnier).
 function createDefaultDayState(day){
+  const names = {
+    dienstag: "Fasnacht Hofdere – Dienstag",
+    kleinformationen: "Fasnacht Hofdere – Kleinformationen"
+  };
   return {
-    eventName: day === "dienstag" ? "Fasnacht Hofdere – Dienstag" : "Fasnacht Hofdere",
+    eventName: names[day] || "Fasnacht Hofdere",
     eventDate:"",
     minBuffer:30,
     locations:createDefaultLocations(),
@@ -775,15 +782,18 @@ function createDefaultDayState(day){
 function createDefaultRootState(){
   return {
     samstag: createDefaultDayState("samstag"),
-    dienstag: createDefaultDayState("dienstag")
+    dienstag: createDefaultDayState("dienstag"),
+    kleinformationen: createDefaultDayState("kleinformationen")
   };
 }
 
 const STORAGE_KEY = "fasnachtHofdereState";
 const DAY_KEY = "fasnachtHofdereDay";
+const DAY_LABELS = { samstag: "Samstag", dienstag: "Dienstag", kleinformationen: "Kleinformationen" };
+function dayLabel(day){ return DAY_LABELS[day] || day; }
 let rootState = null;
 let state = null;         // Live-Referenz auf rootState[currentDay]
-let currentDay = null;    // "samstag" | "dienstag" | null (noch nicht gewählt)
+let currentDay = null;    // "samstag" | "dienstag" | "kleinformationen" | null (noch nicht gewählt)
 
 function normalizeDayState(parsed, day){
   const def = createDefaultDayState(day);
@@ -806,17 +816,19 @@ function normalizeDayState(parsed, day){
 
 function normalizeRootState(parsed){
   if(!parsed) return createDefaultRootState();
-  if(!parsed.samstag && !parsed.dienstag){
+  if(!parsed.samstag && !parsed.dienstag && !parsed.kleinformationen){
     // Migration: altes Format (ein einzelner Tag ohne Tages-Aufteilung) ->
-    // wird komplett zu "Samstag", "Dienstag" startet leer.
+    // wird komplett zu "Samstag", "Dienstag"/"Kleinformationen" starten leer.
     return {
       samstag: normalizeDayState(parsed, "samstag"),
-      dienstag: createDefaultDayState("dienstag")
+      dienstag: createDefaultDayState("dienstag"),
+      kleinformationen: createDefaultDayState("kleinformationen")
     };
   }
   return {
     samstag: normalizeDayState(parsed.samstag || {}, "samstag"),
-    dienstag: normalizeDayState(parsed.dienstag || {}, "dienstag")
+    dienstag: normalizeDayState(parsed.dienstag || {}, "dienstag"),
+    kleinformationen: normalizeDayState(parsed.kleinformationen || {}, "kleinformationen")
   };
 }
 
@@ -944,8 +956,11 @@ function applyDayVisibility(){
   document.querySelectorAll(".samstag-only").forEach(el => {
     el.style.display = isSamstag ? "" : "none";
   });
+  // "dienstag-only" ist speziell die "Kontaktdaten von Samstag kopieren"-
+  // Funktion und ergibt für Kleinformationen keinen Sinn - bewusst an
+  // "dienstag" gebunden, nicht an "nicht Samstag".
   document.querySelectorAll(".dienstag-only").forEach(el => {
-    el.style.display = isSamstag ? "none" : "";
+    el.style.display = currentDay === "dienstag" ? "" : "none";
   });
   document.querySelectorAll(".day-switch-btn").forEach(btn => {
     btn.classList.toggle("active", btn.getAttribute("data-day") === currentDay);
@@ -2360,7 +2375,10 @@ function fillGroupModalFromParsed(p){
     renderWishRows();
   }
   if(p.fasnachtstage){
-    alert('Erkannter Tag-Hinweis aus der Mail:\n"'+p.fasnachtstage+'"\n\nPrüfe, ob das zum aktuell gewählten Tag ('+(currentDay==="samstag"?"Samstag":"Dienstag")+') passt.');
+    alert('Erkannter Tag-Hinweis aus der Mail:\n"'+p.fasnachtstage+'"\n\nPrüfe, ob das zum aktuell gewählten Bereich ('+dayLabel(currentDay)+') passt.');
+  }
+  if(p.vereinsart && /klein/i.test(p.vereinsart) && currentDay !== "kleinformationen"){
+    alert('Erkannte Vereinsart aus der Mail: "'+p.vereinsart+'"\n\nDas ist evtl. eine Kleinformation - aktuell gewählt ist aber "'+dayLabel(currentDay)+'". Lieber zu "Kleinformationen" wechseln und dort übernehmen?');
   }
 }
 
@@ -2408,8 +2426,9 @@ function renderPendingRegistrationsList(){
   }
   list.innerHTML = pendingRegistrations.map(r => {
     let html = '<div class="pending-card">';
-    html += "<h3 style='margin:0 0 6px;'>"+escapeHtml(r.vereinsname||"(kein Name erkannt)")+"</h3>";
+    html += "<h3 style='margin:0 0 6px;'>"+escapeHtml(r.vereinsname||"(kein Name erkannt)")+(r.vereinsart?' <span class="hint" style="font-weight:400;">('+escapeHtml(r.vereinsart)+')</span>':"")+"</h3>";
     if(r.fasnachtstage) html += '<div class="pending-hint">Tag-Hinweis aus der Mail: "'+escapeHtml(r.fasnachtstage)+'"</div>';
+    if(r.vereinsart && /klein/i.test(r.vereinsart)) html += '<div class="pending-hint">⚠️ Vereinsart "'+escapeHtml(r.vereinsart)+'" - evtl. unter "Kleinformationen" übernehmen statt Samstag/Dienstag.</div>';
     html += '<div class="pending-fields">';
     html += pendingFieldLine("Mitglieder", r.mitglieder);
     html += pendingFieldLine("Anreise", r.anreise);
@@ -2420,7 +2439,7 @@ function renderPendingRegistrationsList(){
     html += "</div>";
     html += '<div class="pending-actions">';
     html += '<button class="btn btn-secondary btn-small" data-pending-reject="'+r.id+'">🗑 Verwerfen</button>';
-    html += '<button class="btn btn-gold btn-small" data-pending-approve="'+r.id+'">✅ Übernehmen (für '+(currentDay==="samstag"?"Samstag":"Dienstag")+')</button>';
+    html += '<button class="btn btn-gold btn-small" data-pending-approve="'+r.id+'">✅ Übernehmen (für '+dayLabel(currentDay)+')</button>';
     html += "</div></div>";
     return html;
   }).join("");
@@ -2593,8 +2612,8 @@ function addLocation(){
 }
 
 function exportData(){
-  // Exportiert IMMER beide Tage (Samstag + Dienstag) als vollständiges Backup,
-  // unabhängig davon, welcher Tag gerade aktiv ist.
+  // Exportiert IMMER alle Bereiche (Samstag + Dienstag + Kleinformationen) als
+  // vollständiges Backup, unabhängig davon, welcher Bereich gerade aktiv ist.
   const blob = new Blob([JSON.stringify(rootState, null, 2)], {type:"application/json"});
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -2611,7 +2630,7 @@ function importData(file){
   reader.onload = () => {
     try{
       const parsed = JSON.parse(reader.result);
-      if(!confirm("Import überschreibt alle aktuellen Daten (Samstag UND Dienstag). Fortfahren?")) return;
+      if(!confirm("Import überschreibt alle aktuellen Daten (Samstag, Dienstag UND Kleinformationen). Fortfahren?")) return;
       rootState = normalizeRootState(parsed);
       state = rootState[currentDay];
       saveState();
@@ -2626,8 +2645,8 @@ function importData(file){
 }
 
 function deleteAllData(){
-  if(!confirm("Wirklich ALLE Daten löschen (Samstag UND Dienstag)? Dieser Schritt kann nicht rückgängig gemacht werden.")) return;
-  if(!confirm("Letzte Bestätigung: Alle Gruppen, Pläne und Einstellungen beider Tage werden entfernt.")) return;
+  if(!confirm("Wirklich ALLE Daten löschen (Samstag, Dienstag UND Kleinformationen)? Dieser Schritt kann nicht rückgängig gemacht werden.")) return;
+  if(!confirm("Letzte Bestätigung: Alle Gruppen, Pläne und Einstellungen aller Bereiche werden entfernt.")) return;
   localStorage.removeItem(STORAGE_KEY);
   rootState = createDefaultRootState();
   state = rootState[currentDay];
@@ -2745,8 +2764,10 @@ initEvents();
 
 document.getElementById("btnDayGateSamstag").addEventListener("click", () => chooseDay("samstag"));
 document.getElementById("btnDayGateDienstag").addEventListener("click", () => chooseDay("dienstag"));
+document.getElementById("btnDayGateKleinformationen").addEventListener("click", () => chooseDay("kleinformationen"));
 document.getElementById("btnDaySwitchSamstag").addEventListener("click", () => switchDay("samstag"));
 document.getElementById("btnDaySwitchDienstag").addEventListener("click", () => switchDay("dienstag"));
+document.getElementById("btnDaySwitchKleinformationen").addEventListener("click", () => switchDay("kleinformationen"));
 
 document.getElementById("loginForm").addEventListener("submit", async (e) => {
   e.preventDefault();
