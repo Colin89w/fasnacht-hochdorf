@@ -1988,19 +1988,38 @@ const UMZUG_STAMM_MIN_GAP = 3; // Mindestanzahl anderer Guggen zwischen zwei Hof
 // Bildet aus den (nach Grösse sortierten) Gäste-Guggen Zweier-Einheiten mit
 // möglichst ähnlicher Mitgliederzahl (optimal fürs spätere Battle-Pairing),
 // und mischt die Reihenfolge dieser Einheiten zufällig. Bei ungerader Anzahl
-// bleibt eine Einheit mit nur 1 Gugge übrig und wird zufällig eingestreut.
+// bleibt eine Einheit mit nur 1 Gugge übrig; welche das ist, wird so
+// gewählt, dass die ÜBRIGEN (paarweise konsekutiv sortiert) möglichst gut
+// zusammenpassen: einfach immer die letzte (meist grösste) übrig zu lassen,
+// könnte sonst z.B. aus [10,55,56] das schlechte Paar (10,55) erzeugen,
+// obwohl (55,56) mit 10 allein viel besser wäre. Der Einzelgänger kommt
+// bewusst IMMER ans Ende der Einheiten-Queue (nicht an eine zufällige
+// Position) - sonst würde er, zufällig vor ein 2er-Paar gemischt, dessen
+// Battle-Paarung durch die Positions-Verschiebung trotzdem zerreissen.
 function buildGastUnits(gastSorted){
+  const n = gastSorted.length;
+  let leftoverIdx = -1;
+  if(n % 2 === 1){
+    let bestMax = Infinity;
+    for(let skip = 0; skip < n; skip++){
+      const rest = gastSorted.filter((_, idx) => idx !== skip);
+      let maxDiff = 0;
+      for(let i=0; i+1<rest.length; i+=2){
+        maxDiff = Math.max(maxDiff, Math.abs((rest[i].memberCount||0) - (rest[i+1].memberCount||0)));
+      }
+      if(maxDiff < bestMax){ bestMax = maxDiff; leftoverIdx = skip; }
+    }
+  }
+  const leftover = leftoverIdx >= 0 ? gastSorted[leftoverIdx] : null;
+  const rest = leftoverIdx >= 0 ? gastSorted.filter((_, idx) => idx !== leftoverIdx) : gastSorted;
   const units = [];
-  let i = 0;
-  for(; i+1 < gastSorted.length; i += 2) units.push([gastSorted[i], gastSorted[i+1]]);
-  const leftover = (i < gastSorted.length) ? gastSorted[i] : null;
+  for(let i=0; i+1<rest.length; i+=2) units.push([rest[i], rest[i+1]]);
   for(let j=units.length-1;j>0;j--){
     const k = Math.floor(Math.random()*(j+1));
     [units[j], units[k]] = [units[k], units[j]];
   }
   if(leftover !== null){
-    const pos = Math.floor(Math.random()*(units.length+1));
-    units.splice(pos, 0, [leftover]);
+    units.push([leftover]);
   }
   return units;
 }
@@ -2062,6 +2081,32 @@ function generateUmzugOrder(){
     const g = getGroup(e.groupId);
     return !!g && g.type === "Stamm";
   }
+  function lockedGroupAt(i){
+    if(i < 0 || i >= N) return null;
+    const e = entries[i];
+    return (e && e.locked) ? getGroup(e.groupId) : null;
+  }
+
+  // Battle-Paare entstehen später aus je 2 aufeinanderfolgenden Positionen
+  // (1-2, 3-4, ...) über die GESAMTE Liste, unabhängig von Segmentgrenzen.
+  // Eine fixierte Gugge an einer 0-basiert UNGERADEN Position ist dadurch
+  // bereits die erste Hälfte eines Battle-Paars, dessen zweite Hälfte aus dem
+  // angrenzenden Segment kommt - ohne Gegenmassnahme würde dort einfach das
+  // nächste frisch gebildete Grössen-Paar angeschnitten (Beispiel: eine
+  // fixierte 38er-Gugge neben einer frisch eingefügten 55er, während die
+  // eigentlich gut passenden 55/56 und 10/24 über die Paargrenze hinweg
+  // zerrissen werden). Daher wird an so einer Grenze zuerst eine einzelne,
+  // grössenmässig zur fixierten Nachbar-Gugge passende Gugge als
+  // "Lückenfüller" reserviert, bevor der Rest des Segments normal paarweise
+  // aufgefüllt wird.
+  const segNeedsLeftFiller = segments.map(seg => {
+    const neighbor = lockedGroupAt(seg[0]-1);
+    return (neighbor && seg[0] % 2 === 1) ? neighbor : null;
+  });
+  const segNeedsRightFiller = segments.map(seg => {
+    const neighbor = lockedGroupAt(seg[seg.length-1]+1);
+    return (neighbor && seg[seg.length-1] % 2 === 0) ? neighbor : null;
+  });
 
   const unlockedGroups = entries.filter(e => !e.locked).map(e => getGroup(e.groupId));
   const stammSorted = unlockedGroups.filter(g => g.type === "Stamm").sort((a,b) => (a.memberCount||0) - (b.memberCount||0));
@@ -2079,6 +2124,10 @@ function generateUmzugOrder(){
     pool.forEach((g,i) => { const d = Math.abs((g.memberCount||0)-target); if(d < bd){ bd = d; bi = i; } });
     return bi;
   }
+  function takeBestMatch(pool, target){
+    const idx = nearestIdx(pool, target);
+    return idx < 0 ? null : pool.splice(idx,1)[0];
+  }
   const stammUnits = stammSorted.map(s => {
     const idx = nearestIdx(gastPool, s.memberCount||0);
     if(idx < 0) return [s];
@@ -2086,17 +2135,26 @@ function generateUmzugOrder(){
     return [s, partner];
   });
 
-  // Unlocked Hofdere-Einheiten proportional zur Segmentlänge auf die Segmente
-  // verteilen (Restverteilung nach grösstem Bruchteil), dann auf die jeweilige
-  // Segmentkapazität (Einheiten sind i.d.R. 2 Guggen gross) kappen und
-  // Überschuss ins nächste Segment mit Platz schieben.
-  const rawShares = segments.map(seg => stammUnits.length * seg.length / (totalUnlocked || 1));
+  // Lückenfüller erst NACH den Hofdere-Partnern ziehen (die haben Vorrang),
+  // aus der dann noch übrigen Gäste-Pool. Reicht die Pool nicht mehr aus,
+  // bleibt der Füller einfach null - das Segment wird dann wie bisher ganz
+  // normal (ohne Füller) aufgefüllt.
+  const segLeftFiller = segNeedsLeftFiller.map(neighbor => neighbor ? takeBestMatch(gastPool, neighbor.memberCount||0) : null);
+  const segRightFiller = segNeedsRightFiller.map(neighbor => neighbor ? takeBestMatch(gastPool, neighbor.memberCount||0) : null);
+
+  // Unlocked Hofdere-Einheiten proportional zur (um reservierte Lückenfüller
+  // reduzierten) Segmentlänge auf die Segmente verteilen (Restverteilung nach
+  // grösstem Bruchteil), dann auf die jeweilige Segmentkapazität (Einheiten
+  // sind i.d.R. 2 Guggen gross) kappen und Überschuss ins nächste Segment mit
+  // Platz schieben.
+  const segEffLen = segments.map((seg, s) => seg.length - (segLeftFiller[s]?1:0) - (segRightFiller[s]?1:0));
+  const rawShares = segments.map((seg, s) => stammUnits.length * segEffLen[s] / (totalUnlocked || 1));
   const stammCounts = rawShares.map(Math.floor);
   let remainder = stammUnits.length - stammCounts.reduce((a,b)=>a+b,0);
   const byFrac = rawShares.map((v,i) => ({i, frac: v - Math.floor(v)})).sort((a,b) => b.frac - a.frac);
   let fi = 0;
   while(remainder > 0 && fi < byFrac.length){ stammCounts[byFrac[fi].i]++; remainder--; fi++; }
-  const segCap = segments.map(seg => Math.max(0, Math.floor(seg.length / 2)));
+  const segCap = segEffLen.map(len => Math.max(0, Math.floor(len / 2)));
   for(let s=0; s<segments.length; s++){
     while(stammCounts[s] > segCap[s]){
       let s2 = -1;
@@ -2113,7 +2171,8 @@ function generateUmzugOrder(){
   let stammCursor = 0, shortfallGaps = 0, totalGaps = 0;
 
   segments.forEach((seg, s) => {
-    const segLen = seg.length;
+    const physLen = seg.length;    // tatsächliche Anzahl Plätze in diesem Segment
+    const segLen = segEffLen[s];   // davon übrig nach Abzug reservierter Lückenfüller
     const kStamm = stammCounts[s];
     const segStamm = stammUnits.slice(stammCursor, stammCursor+kStamm);
     stammCursor += kStamm;
@@ -2122,15 +2181,25 @@ function generateUmzugOrder(){
     const leftLockedStamm = isLockedStammAt(seg[0]-1);
     const rightLockedStamm = isLockedStammAt(seg[seg.length-1]+1);
 
+    // Setzt die gefüllte Segment-Mitte zusammen mit den reservierten
+    // Lückenfüllern (falls vorhanden) an den Rändern und schreibt das
+    // Ergebnis auf die globalen Positionen dieses Segments.
+    function assemble(middle){
+      const out = [];
+      if(segLeftFiller[s]) out.push(segLeftFiller[s]);
+      out.push(...middle);
+      if(segRightFiller[s]) out.push(segRightFiller[s]);
+      seg.forEach((entryIdx, i) => { entries[entryIdx] = {groupId: out[i].id, included:true, locked:false}; });
+    }
+
     if(kStamm === 0){
       // Keine neue Hofdere-Gugge in diesem Segment - ggf. dient es als reiner
       // Puffer zwischen zwei fixierten Hofdere-Guggen und muss lang genug sein.
       if(leftLockedStamm && rightLockedStamm){
         totalGaps++;
-        if(segLen < UMZUG_STAMM_MIN_GAP) shortfallGaps++;
+        if(physLen < UMZUG_STAMM_MIN_GAP) shortfallGaps++;
       }
-      const segGast = drawFromUnits(gastUnits, segLen);
-      seg.forEach((entryIdx, i) => { entries[entryIdx] = {groupId: segGast[i].id, included:true, locked:false}; });
+      assemble(drawFromUnits(gastUnits, segLen));
       return;
     }
 
@@ -2182,7 +2251,7 @@ function generateUmzugOrder(){
       if(i < segStamm.length) filled.push(...segStamm[i]);
     });
 
-    seg.forEach((entryIdx, i) => { entries[entryIdx] = {groupId: filled[i].id, included:true, locked:false}; });
+    assemble(filled);
   });
 
   const excludedEntries = state.umzug.filter(u => !u.included);
