@@ -469,8 +469,9 @@ td.conflict .warn-icon{color:var(--danger);margin-right:4px;cursor:help;}
     <h2>Umzug</h2>
     <div class="toolbar">
       <button class="btn btn-gold" id="btnGenerateUmzug">🎲 Umzug generieren (Paare nach Grösse)</button>
+      <button class="btn btn-secondary" id="btnDetermineParticipants">🕕 Umzug/Battle-Teilnehmer anhand Zeiten bestimmen (18:00)</button>
     </div>
-    <p class="hint">Fasst ähnlich grosse Gäste-Guggen zu Zweier-Paaren zusammen (gute Battle-Gegner) und reiht diese Paare in zufälliger Reihenfolge aneinander – <em>nicht</em> nach Grösse aufsteigend sortiert. Zwischen zwei Hofdere-Guggen (Stamm) bleiben dabei mindestens 3 andere Guggen Abstand. 📍 an einer Gruppe fixiert ihre Position (z.B. Tambouren immer zuvorderst) – „Umzug generieren" lässt fixierte (📌) Positionen unangetastet und füllt nur den Rest auf. Reihenfolge danach per Drag &amp; Drop feinjustierbar. Checkbox abwählen falls Gruppe nicht mitläuft – sie verschwindet dann aus dieser Liste und ist über „Gruppe bearbeiten" wieder aktivierbar.</p>
+    <p class="hint">Fasst ähnlich grosse Gäste-Guggen zu Zweier-Paaren zusammen (gute Battle-Gegner) und reiht diese Paare in zufälliger Reihenfolge aneinander – <em>nicht</em> nach Grösse aufsteigend sortiert. Zwischen zwei Hofdere-Guggen (Stamm) bleiben dabei mindestens 3 andere Guggen Abstand. 📍 an einer Gruppe fixiert ihre Position (z.B. Tambouren immer zuvorderst) – „Umzug generieren" lässt fixierte (📌) Positionen unangetastet und füllt nur den Rest auf. Reihenfolge danach per Drag &amp; Drop feinjustierbar. Checkbox abwählen falls Gruppe nicht mitläuft – sie verschwindet dann aus dieser Liste und ist über „Gruppe bearbeiten" wieder aktivierbar. „Teilnehmer anhand Zeiten bestimmen" setzt Umzug- und Battle-Teilnahme automatisch: wer laut Anreise/Abreise um 18:00 in Hochdorf ist, macht mit – alle anderen nicht (überschreibt die aktuellen Haken).</p>
     <ul class="umzug-list" id="umzugList"></ul>
   </section>
 
@@ -1959,6 +1960,29 @@ function syncUmzugWithGroups(){
   state.umzug = state.umzug.filter(u => getGroup(u.groupId));
 }
 
+// Setzt Umzug- UND Battle-Teilnahme automatisch: wer laut Anreise/Abreise um
+// 18:00 in Hochdorf ist (Anreise <= 18:00 und Abreise >= 18:00), macht bei
+// beidem mit - alle anderen nicht. Gruppen ohne (vollständige) Zeiten werden
+// unverändert gelassen, da sich ihre Anwesenheit nicht bestimmen lässt.
+function determineUmzugBattleParticipants(){
+  if(!confirm('Umzug- und Battle-Teilnahme automatisch bestimmen: Alle Gruppen, die laut Anreise/Abreise um 18:00 in Hochdorf sind, machen mit - alle anderen nicht. Das überschreibt die aktuellen Haken bei "Macht beim Umzug/Battle mit". Fortfahren?')) return;
+  const cutoff = parseTimeToMinutes("18:00");
+  let changed = 0, skipped = 0;
+  state.groups.forEach(g => {
+    const arr = parseTimeToMinutes(g.arrival);
+    const dep = parseTimeToMinutes(g.departure);
+    if(arr === null || dep === null){ skipped++; return; }
+    const present = arr <= cutoff && dep >= cutoff;
+    g.battleParticipate = present;
+    const umzugEntry = state.umzug.find(u => u.groupId === g.id);
+    if(umzugEntry) umzugEntry.included = present;
+    changed++;
+  });
+  saveState();
+  renderAll();
+  alert("Teilnehmer bestimmt: " + changed + " Gruppe(n) aktualisiert" + (skipped ? ", " + skipped + " ohne vollständige Anreise/Abreisezeit übersprungen (unverändert gelassen)." : "."));
+}
+
 const UMZUG_STAMM_MIN_GAP = 3; // Mindestanzahl anderer Guggen zwischen zwei Hofdere-Guggen (Stamm)
 
 // Bildet aus den (nach Grösse sortierten) Gäste-Guggen Zweier-Einheiten mit
@@ -2798,6 +2822,7 @@ function initEvents(){
 
   document.getElementById("btnGenerateBattle").addEventListener("click", generateBattleFromUmzug);
   document.getElementById("btnGenerateUmzug").addEventListener("click", generateUmzugOrder);
+  document.getElementById("btnDetermineParticipants").addEventListener("click", determineUmzugBattleParticipants);
 
   document.getElementById("btnCopyContacts").addEventListener("click", copyContacts);
 
